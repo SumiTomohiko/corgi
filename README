@@ -12,11 +12,59 @@ Features
 Requirements
 ------------
 
-* CPU
-  * Intel x86
-* OS
-  * Ubuntu Linux 8.04
-  * FreeBSD 8.1
-  * OpenBSD 4.6
+CPU
+~~~
+
+- Intel x86
+
+OS
+~~
+
+- Ubuntu Linux 8.04
+- FreeBSD 8.1
+- OpenBSD 4.6
+
+Syntax
+------
+
+Syntax Elements
+~~~~~~~~~~~~~~~
+
+====== ===============
+\|     alternation
+(...)  group
+[...]  character class
+====== ===============
+
+Characters
+~~~~~~~~~~
+
+========= =================================
+\\t       horizontal tab (0x09)
+\\v       vertical tab (0x0b)
+\\n       newline (0x0a)
+\\r       return (0x0d)
+\\b       backspace (0x08)
+\\f       form feed (0x0c)
+\\a       bell (0x07)
+\\e       escape (0x1b)
+\\x7HHHHH hexadecimal character (codepoint)
+========= =================================
+
+Character Types
+~~~~~~~~~~~~~~~
+
+=== ==================================================================
+\\w word character (Letter \| Mark \| Number \| Connector-Punctuation)
+\\W non word character
+\\s white space character (0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x85)
+\\S no white space character
+\\d decimal number (GeneralCategory - DecimalNumber)
+\\D non decimal digit character
+\\h hexadecimal digit character [0-9a-fA-F]
+\\H non hexadecimal digit character
+\\b word boundary
+\\B not word boundary
+=== ==================================================================
 
 .. vim: tabstop=2 shiftwidth=2 expandtab softtabstop=2 filetype=rst
