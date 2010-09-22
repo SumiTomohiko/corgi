@@ -17,6 +17,8 @@ AC_PROG_LIBTOOL
 # Checks for header files.
 
 # Checks for typedefs, structures, and compiler characteristics.
+AC_CHECK_SIZEOF(int)
+AC_CHECK_SIZEOF(long)
 
 # Checks for library functions.
 
