@@ -1,0 +1,22 @@
+corgi 0.0.1
+===========
+
+corgi is a regular expression library for C.
+
+Features
+--------
+
+* corgi accepts UTF-32 strings.
+* The MIT License
+
+Requirements
+------------
+
+* CPU
+  * Intel x86
+* OS
+  * Ubuntu Linux 8.04
+  * FreeBSD 8.1
+  * OpenBSD 4.6
+
+.. vim: tabstop=2 shiftwidth=2 expandtab softtabstop=2 filetype=rst
