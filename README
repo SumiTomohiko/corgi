@@ -67,4 +67,53 @@ Character Types
 \\B not word boundary
 === ==================================================================
 
+Quantifier
+~~~~~~~~~~
+
+====== ============================================
+greedy
+====== ============================================
+?      1 or 0 times
+\*     0 or more times
+\+     1 or more times
+{n,m}  at least n but not more than m times
+{n,}   at least n times
+{,n}   at least 0 but not more than n times ({0,n})
+{n}    n times
+====== ============================================
+
+========= ================================================
+reluctant
+========= ================================================
+??        1 or 0 times
+\*?       0 or more times
+\+?       1 or more times
+{n,m}?    at least n but not more than m times
+{n,}?     at least n times
+{,n}?     at least 0 but not more than n times (== {0,n}?)
+========= ================================================
+
+Anchors
+~~~~~~~
+
+=== ============================================
+^   beginning of the line
+$   end of the line
+\\b word boundary
+\\B not word boundary
+\\A beginning of string
+\\Z end of string, or before newline at the end
+\\z end of string
+\\G matching start position
+=== ============================================
+
+Character class
+~~~~~~~~~~~~~~~
+
+===== ===========================================
+^...  negative class (lowest precedence operator)
+x-y   range from x to y
+[...] set (character class in character class)
+===== ===========================================
+
 .. vim: tabstop=2 shiftwidth=2 expandtab softtabstop=2 filetype=rst
