@@ -29,7 +29,10 @@ typedef CorgiInt CorgiStatus;
 
 #define CORGI_OK 0
 
+typedef CorgiChar CorgiCode;
+
 struct CorgiRegexp {
+    CorgiCode* code;
 };
 
 typedef struct CorgiRegexp CorgiRegexp;

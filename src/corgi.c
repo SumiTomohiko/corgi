@@ -89,8 +89,6 @@ static char sre_char_info[128] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 6, 2,
 #define SRE_UNI_IS_ALNUM(c)     (corgi_is_alpha((c)) || corgi_is_decimal((c)) || corgi_is_digit((c)) || corgi_is_numeric((c)))
 #define SRE_UNI_IS_WORD(c)      (SRE_UNI_IS_ALNUM((c)) || ((c) == '_'))
 
-typedef CorgiChar Code;
-
 /* locale-specific character predicates */
 /* !(c & ~N) == (c < N+1) for any unsigned c, this avoids
  * warnings when c's type supports only numbers < N+1 */
@@ -101,7 +99,7 @@ typedef CorgiChar Code;
 #define SRE_LOC_IS_WORD(ch)         (SRE_LOC_IS_ALNUM((ch)) || ((ch) == '_'))
 
 static int
-sre_category(Code category, CorgiChar ch)
+sre_category(CorgiCode category, CorgiChar ch)
 {
     switch (category) {
     case SRE_CATEGORY_DIGIT:
@@ -149,7 +147,7 @@ sre_category(Code category, CorgiChar ch)
 
 struct Repeat {
     CorgiInt count;
-    Code* pattern; /* points to REPEAT operator arguments */
+    CorgiCode* pattern; /* points to REPEAT operator arguments */
     void* last_ptr; /* helper to check for infinite loops */
     struct Repeat* prev; /* points to previous repeat context */
 };
@@ -206,7 +204,7 @@ data_stack_grow(State* state, CorgiInt size)
 }
 
 static int
-sre_at(State* state, CorgiChar* ptr, Code at)
+sre_at(State* state, CorgiChar* ptr, CorgiCode at)
 {
     /* check if pointer is at given position */
     CorgiInt thisp;
@@ -274,7 +272,7 @@ sre_at(State* state, CorgiChar* ptr, Code at)
 }
 
 static int
-sre_charset(Code* set, Code ch)
+sre_charset(CorgiCode* set, CorgiCode ch)
 {
     /* check if character is a member of the given set */
     int ok = 1;
@@ -335,10 +333,10 @@ sre_charset(Code* set, Code ch)
     }
 }
 
-static CorgiInt sre_match(State*, Code*);
+static CorgiInt sre_match(State*, CorgiCode*);
 
 static CorgiInt
-sre_count(State* state, Code* pattern, CorgiInt maxcount)
+sre_count(State* state, CorgiCode* pattern, CorgiInt maxcount)
 {
     CorgiChar* ptr = state->ptr;
     CorgiChar* end = state->end;
@@ -348,7 +346,7 @@ sre_count(State* state, Code* pattern, CorgiInt maxcount)
         end = ptr + maxcount;
     }
 
-    Code chr;
+    CorgiCode chr;
     CorgiInt i;
     switch (pattern[0]) {
     case SRE_OP_IN:
@@ -375,7 +373,7 @@ sre_count(State* state, Code* pattern, CorgiInt maxcount)
         /* repeated literal */
         chr = pattern[1];
         TRACE(("|%p|%p|COUNT LITERAL %d (%c)\n", pattern, ptr, chr, isprint(chr) ? chr : ' '));
-        while ((ptr < end) && ((Code)*ptr == chr)) {
+        while ((ptr < end) && (*ptr == chr)) {
             ptr++;
         }
         break;
@@ -391,7 +389,7 @@ sre_count(State* state, Code* pattern, CorgiInt maxcount)
         /* repeated non-literal */
         chr = pattern[1];
         TRACE(("|%p|%p|COUNT NOT_LITERAL %d\n", pattern, ptr, chr));
-        while ((ptr < end) && ((Code)*ptr != chr)) {
+        while ((ptr < end) && (*ptr != chr)) {
             ptr++;
         }
         break;
@@ -593,12 +591,12 @@ typedef struct {
     CorgiInt last_ctx_pos;
     CorgiInt jump;
     CorgiChar* ptr;
-    Code* pattern;
+    CorgiCode* pattern;
     CorgiInt count;
     CorgiInt lastmark;
     CorgiInt lastindex;
     union {
-        Code chr;
+        CorgiCode chr;
         Repeat* rep;
     } u;
 } sre_match_context;
@@ -606,7 +604,7 @@ typedef struct {
 /* check if string matches the given pattern.  returns <0 for
    error, 0 for failure, and 1 for success */
 static CorgiInt
-sre_match(State* state, Code* pattern)
+sre_match(State* state, CorgiCode* pattern)
 {
     TRACE(("|%p|%p|ENTER\n", pattern, state->ptr));
 
@@ -772,11 +770,11 @@ entrance:
                 MARK_PUSH(ctx->lastmark);
             }
             for (; ctx->pattern[0]; ctx->pattern += ctx->pattern[0]) {
-                if ((ctx->pattern[1] == SRE_OP_LITERAL) && ((end <= ctx->ptr) || ((Code)*ctx->ptr != ctx->pattern[2]))) {
+                if ((ctx->pattern[1] == SRE_OP_LITERAL) && ((end <= ctx->ptr) || (*ctx->ptr != ctx->pattern[2]))) {
                     printf("%s:%u\n", __FILE__, __LINE__);
                     continue;
                 }
-                if ((ctx->pattern[1] == SRE_OP_IN) && ((end <= ctx->ptr) || !sre_charset(ctx->pattern + 3, (Code)*ctx->ptr))) {
+                if ((ctx->pattern[1] == SRE_OP_IN) && ((end <= ctx->ptr) || !sre_charset(ctx->pattern + 3, *ctx->ptr))) {
                     printf("%s:%u\n", __FILE__, __LINE__);
                     continue;
                 }
@@ -1243,16 +1241,16 @@ exit:
 
 #if 0
 static CorgiInt
-sre_search(State* state, Code* pattern)
+sre_search(State* state, CorgiCode* pattern)
 {
     CorgiChar* ptr = state->start;
     CorgiChar* end = state->end;
     CorgiInt status = 0;
     CorgiInt prefix_len = 0;
     CorgiInt prefix_skip = 0;
-    Code* prefix = NULL;
-    Code* charset = NULL;
-    Code* overlap = NULL;
+    CorgiCode* prefix = NULL;
+    CorgiCode* charset = NULL;
+    CorgiCode* overlap = NULL;
     int flags = 0;
 
     if (pattern[0] == SRE_OP_INFO) {
@@ -1294,7 +1292,7 @@ sre_search(State* state, Code* pattern)
         end = (CorgiChar*)state->end;
         while (ptr < end) {
             for (;;) {
-                if ((Code) ptr[0] != prefix[i]) {
+                if (ptr[0] != prefix[i]) {
                     if (!i) {
                         break;
                     }
@@ -1326,10 +1324,10 @@ sre_search(State* state, Code* pattern)
     if (pattern[0] == SRE_OP_LITERAL) {
         /* pattern starts with a literal character.  this is used
            for short prefixes, and if fast search is disabled */
-        Code chr = pattern[1];
+        CorgiCode chr = pattern[1];
         end = (CorgiChar*)state->end;
         for (;;) {
-            while ((ptr < end) && ((Code)ptr[0] != chr)) {
+            while ((ptr < end) && (ptr[0] != chr)) {
                 ptr++;
             }
             if (end <= ptr) {
@@ -1472,12 +1470,12 @@ state_fini(State* state)
 #define GET_SKIP GET_SKIP_ADJ(0)
 
 static int
-_validate_charset(Code *code, Code *end)
+_validate_charset(CorgiCode *code, CorgiCode *end)
 {
     /* Some variables are manipulated by the macros above */
-    Code op;
-    Code arg;
-    Code offset;
+    CorgiCode op;
+    CorgiCode arg;
+    CorgiCode offset;
     int i;
 
     while (code < end) {
@@ -1493,7 +1491,7 @@ _validate_charset(Code *code, Code *end)
             GET_ARG;
             break;
         case SRE_OP_CHARSET:
-            offset = 32 / sizeof(Code); /* 32-byte bitmap */
+            offset = 32 / sizeof(CorgiCode); /* 32-byte bitmap */
             if ((code + offset < code) || (end < code + offset)) {
                 FAIL;
             }
@@ -1501,7 +1499,7 @@ _validate_charset(Code *code, Code *end)
             break;
         case SRE_OP_BIGCHARSET:
             GET_ARG; /* Number of blocks */
-            offset = 256 / sizeof(Code); /* 256-byte table */
+            offset = 256 / sizeof(CorgiCode); /* 256-byte table */
             if ((code + offset < code) || (end < code + offset)) {
                 FAIL;
             }
@@ -1512,7 +1510,7 @@ _validate_charset(Code *code, Code *end)
                 }
             }
             code += offset;
-            offset = arg * 32 / sizeof(Code); /* 32-byte bitmap times arg */
+            offset = arg * 32 / sizeof(CorgiCode); /* 32-byte bitmap times arg */
             if ((code + offset < code) || (end < code + offset)) {
                 FAIL;
             }
@@ -1554,12 +1552,12 @@ _validate_charset(Code *code, Code *end)
 }
 
 static int
-_validate_inner(Code *code, Code *end, CorgiInt groups)
+_validate_inner(CorgiCode *code, CorgiCode *end, CorgiInt groups)
 {
     /* Some variables are manipulated by the macros above */
-    Code op;
-    Code arg;
-    Code skip;
+    CorgiCode op;
+    CorgiCode arg;
+    CorgiCode skip;
     VTRACE(("code=%p, end=%p\n", code, end));
     if (end < code) {
         FAIL;
@@ -1630,8 +1628,8 @@ _validate_inner(Code *code, Code *end, CorgiInt groups)
                    <INFO> <1=skip> <2=flags> <3=min> <4=max>;
                    If SRE_INFO_PREFIX or SRE_INFO_CHARSET is in the flags,
                    more follows. */
-                Code flags, min, max, i;
-                Code *newcode;
+                CorgiCode flags, min, max, i;
+                CorgiCode *newcode;
                 GET_SKIP;
                 newcode = code + skip - 1;
                 GET_ARG; flags = arg;
@@ -1652,9 +1650,9 @@ _validate_inner(Code *code, Code *end, CorgiInt groups)
                 /* Validate the prefix */
                 if (flags & SRE_INFO_PREFIX) {
                     GET_ARG;
-                    Code prefix_len = arg;
+                    CorgiCode prefix_len = arg;
                     GET_ARG;
-                    Code prefix_skip = arg;
+                    CorgiCode prefix_skip = arg;
                     /* Here comes the prefix string */
                     if ((code + prefix_len < code) || (newcode < code + prefix_len)) {
                         FAIL;
@@ -1690,7 +1688,7 @@ _validate_inner(Code *code, Code *end, CorgiInt groups)
             break;
         case SRE_OP_BRANCH:
             {
-                Code *target = NULL;
+                CorgiCode *target = NULL;
                 for (;;) {
                     GET_SKIP;
                     if (skip == 0) {
@@ -1722,9 +1720,9 @@ _validate_inner(Code *code, Code *end, CorgiInt groups)
             {
                 GET_SKIP;
                 GET_ARG;
-                Code min = arg;
+                CorgiCode min = arg;
                 GET_ARG;
-                Code max = arg;
+                CorgiCode max = arg;
                 if (max < min) {
                     FAIL;
                 }
@@ -1745,9 +1743,9 @@ _validate_inner(Code *code, Code *end, CorgiInt groups)
             {
                 GET_SKIP;
                 GET_ARG;
-                Code min = arg;
+                CorgiCode min = arg;
                 GET_ARG;
-                Code max = arg;
+                CorgiCode max = arg;
                 if (max < min) {
                     FAIL;
                 }
@@ -1854,7 +1852,7 @@ _validate_inner(Code *code, Code *end, CorgiInt groups)
 }
 
 static int
-_validate_outer(Code *code, Code *end, CorgiInt groups)
+_validate_outer(CorgiCode *code, CorgiCode *end, CorgiInt groups)
 {
     if ((groups < 0) || (100 < groups) || (end <= code) || (end[-1] != SRE_OP_SUCCESS)) {
         FAIL;
@@ -1890,8 +1888,9 @@ corgi_match(CorgiMatch* match, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar*
 {
     State state;
     state_init(&state, regexp, begin, end, at);
+    CorgiInt ret = sre_match(&state, regexp->code);
     state_fini(&state);
-    return CORGI_OK;
+    return ret == 0 ? CORGI_OK : 42;
 }
 
 /**
