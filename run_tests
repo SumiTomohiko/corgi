@@ -1,0 +1,21 @@
+#!/bin/sh
+
+tests_dir="`pwd`/tests"
+(cd "${tests_dir}" && make)
+if [ "$?" != 0 ]; then
+  exit 1
+fi
+
+export TEST_CORGI="${tests_dir}/test-corgi"
+find "${tests_dir}" -perm 0755 -name "test_*" | while read cmd
+do
+  echo "------------ ${cmd} ------------"
+  "${cmd}"
+  if [ "$?" = 0 ]; then
+    echo "OK"
+  else
+    echo "NG"
+  fi
+done
+
+# vim: tabstop=2 shiftwidth=2 expandtab softtabstop=2

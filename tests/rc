@@ -1,0 +1,20 @@
+
+expect_ok()
+{
+  "$@"
+  if [ "$?" != 0 ]; then
+    exit 1
+  fi
+  exit 0
+}
+
+expect_ng()
+{
+  "$@"
+  if [ "$?" = 0 ]; then
+    exit 1
+  fi
+  exit 0
+}
+
+# vim: tabstop=2 shiftwidth=2 expandtab softtabstop=2 filetype=sh

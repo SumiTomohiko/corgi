@@ -26,7 +26,8 @@ AC_CHECK_SIZEOF(void*)
 # Checks for library functions.
 
 AC_CONFIG_FILES([Makefile
-                 src/Makefile])
+                 src/Makefile
+                 tests/Makefile])
 AC_OUTPUT
 
 # vim: tabstop=2 shiftwidth=2 expandtab softtabstop=2
