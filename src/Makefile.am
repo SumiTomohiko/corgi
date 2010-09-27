@@ -6,7 +6,7 @@ AM_CFLAGS = -Wall -Werror
 
 TOOLS_DIR = $(top_srcdir)/tools
 UNICODE_SRC = UnicodeData.txt Unihan.txt DerivedCoreProperties.txt \
-	       LineBreak.txt $(TOOLS_DIR)/makeunicodedata.py
+	      LineBreak.txt $(TOOLS_DIR)/makeunicodedata.py
 
 entries.inc indexes.inc linebreaks.inc whitespaces.inc: $(UNICODE_SRC)
 	$(PYTHON) $(TOOLS_DIR)/makeunicodedata.py .
