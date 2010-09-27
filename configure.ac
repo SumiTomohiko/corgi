@@ -11,6 +11,7 @@ AC_CONFIG_MACRO_DIR([m4])
 # Checks for programs.
 AC_PROG_CC
 AC_PROG_LIBTOOL
+CORGI_PATH_PYTHON([3.0])
 
 # Checks for libraries.
 
@@ -19,6 +20,8 @@ AC_PROG_LIBTOOL
 # Checks for typedefs, structures, and compiler characteristics.
 AC_CHECK_SIZEOF(int)
 AC_CHECK_SIZEOF(long)
+AC_CHECK_SIZEOF(long long)
+AC_CHECK_SIZEOF(void*)
 
 # Checks for library functions.
 
