@@ -1905,9 +1905,69 @@ corgi_fini_match(CorgiMatch* match)
     return CORGI_OK;
 }
 
+struct Storage {
+    struct Storage* next;
+    char* free;
+    char items[0];
+};
+
+typedef struct Storage Storage;
+
+#define STORAGE_SIZE (1024 * 1024)
+
+static Storage*
+alloc_storage(Storage* next)
+{
+    Storage* storage = (Storage*)malloc(STORAGE_SIZE);
+    if (storage == NULL) {
+        return NULL;
+    }
+    storage->next = next;
+    storage->free = storage->items;
+    return storage;
+}
+
+static void* alloc_from_storage(Storage**, CorgiUInt);
+
+static void*
+alloc_from_new_storage(Storage** storage, CorgiUInt size)
+{
+    Storage* new_storage = alloc_storage(*storage);
+    if (new_storage == NULL) {
+        return NULL;
+    }
+    *storage = new_storage;
+    return alloc_from_storage(storage, size);
+}
+
+static void*
+alloc_from_storage(Storage** storage, CorgiUInt size)
+{
+    char* pend = (char*)(*storage) + STORAGE_SIZE;
+    if (pend <= (*storage)->free + size) {
+        return alloc_from_new_storage(storage, size);
+    }
+    void* p = (*storage)->free;
+    (*storage)->free += size;
+    return p;
+}
+
+static void
+free_storage(Storage* storage)
+{
+    Storage* p = storage;
+    while (p != NULL) {
+        Storage* next = p->next;
+        free(p);
+        p = next;
+    }
+}
+
 CorgiStatus
 corgi_compile(CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end)
 {
+    Storage* storage = alloc_storage(NULL);
+    free_storage(storage);
     return CORGI_OK;
 }
 
