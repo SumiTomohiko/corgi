@@ -1906,7 +1906,7 @@ corgi_fini_match(CorgiMatch* match)
 }
 
 CorgiStatus
-corgi_compile(CorgiRegexp* regexp, CorgiChar* s)
+corgi_compile(CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end)
 {
     return CORGI_OK;
 }

@@ -42,7 +42,7 @@ struct CorgiMatch {
 
 typedef struct CorgiMatch CorgiMatch;
 
-CorgiStatus corgi_compile(CorgiRegexp*, CorgiChar*);
+CorgiStatus corgi_compile(CorgiRegexp*, CorgiChar*, CorgiChar*);
 CorgiStatus corgi_fini_match(CorgiMatch*);
 CorgiStatus corgi_fini_regexp(CorgiRegexp*);
 CorgiStatus corgi_init_match(CorgiMatch*);
