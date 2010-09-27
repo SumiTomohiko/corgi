@@ -75,7 +75,7 @@ corgi_is_space(CorgiChar c)
 }
 
 Bool
-corgi_is_deciaml(CorgiChar c)
+corgi_is_decimal(CorgiChar c)
 {
     return is_flag(c, DECIMAL_MASK);
 }
