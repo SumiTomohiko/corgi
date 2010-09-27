@@ -39,6 +39,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include "corgi.h"
 #include "corgi/constants.h"
 #include "corgi/private.h"
@@ -1876,6 +1877,33 @@ _validate(PatternObject *self)
     return 1;
 }
 #endif
+
+CorgiStatus
+corgi_init_regexp(CorgiRegexp* regexp)
+{
+    bzero(regexp, sizeof(*regexp));
+    return CORGI_OK;
+}
+
+CorgiStatus
+corgi_fini_regexp(CorgiRegexp* regexp)
+{
+    free(regexp->code);
+    return CORGI_OK;
+}
+
+CorgiStatus
+corgi_init_match(CorgiMatch* match)
+{
+    bzero(match, sizeof(*match));
+    return CORGI_OK;
+}
+
+CorgiStatus
+corgi_fini_match(CorgiMatch* match)
+{
+    return CORGI_OK;
+}
 
 CorgiStatus
 corgi_compile(CorgiRegexp* regexp, CorgiChar* s)
