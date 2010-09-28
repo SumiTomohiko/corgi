@@ -105,7 +105,7 @@ do_with_regexp(CorgiRegexp* regexp, const char* s, const char* t)
 }
 
 static int
-test_main(int argc, char* argv[])
+corgi_main(int argc, char* argv[])
 {
     if (argc < 2) {
         usage();
@@ -137,7 +137,7 @@ main(int argc, char* argv[])
             return 1;
         }
     }
-    return test_main(argc - optind, argv + optind);
+    return corgi_main(argc - optind, argv + optind);
 }
 
 /**

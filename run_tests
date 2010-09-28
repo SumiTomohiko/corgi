@@ -1,12 +1,7 @@
 #!/bin/sh
 
 tests_dir="`pwd`/tests"
-(cd "${tests_dir}" && make)
-if [ "$?" != 0 ]; then
-  exit 1
-fi
-
-export TEST_CORGI="${tests_dir}/test-corgi"
+export CORGI="`pwd`/src/corgi"
 find "${tests_dir}" -perm 0755 -name "test_*" | while read cmd
 do
   echo "------------ ${cmd} ------------"

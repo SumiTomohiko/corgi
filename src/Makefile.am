@@ -1,4 +1,7 @@
 
+bin_PROGRAMS = corgi
+corgi_SOURCES = main.c
+corgi_LDADD = .libs/libcorgi.a
 lib_LTLIBRARIES = libcorgi.la
 libcorgi_la_SOURCES = corgi.c unicode.c
 DEFAULT_INCLUDES = -I$(top_srcdir)/include
