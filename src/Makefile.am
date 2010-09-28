@@ -2,7 +2,7 @@
 lib_LTLIBRARIES = libcorgi.la
 libcorgi_la_SOURCES = corgi.c unicode.c
 DEFAULT_INCLUDES = -I$(top_srcdir)/include
-AM_CFLAGS = -Wall -Werror
+AM_CFLAGS = -Wall -Werror -DNDEBUG
 
 TOOLS_DIR = $(top_srcdir)/tools
 UNICODE_SRC = UnicodeData.txt Unihan.txt DerivedCoreProperties.txt \
