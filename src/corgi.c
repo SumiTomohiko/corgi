@@ -1963,18 +1963,128 @@ free_storage(Storage* storage)
     }
 }
 
+enum NodeType {
+    NODE_BRANCH,
+    NODE_LITERAL,
+};
+
+typedef enum NodeType NodeType;
+
+struct Node {
+    enum NodeType type;
+    union {
+        struct {
+            struct Node* left;
+            struct Node* right;
+        } branch;
+        struct {
+            CorgiChar c;
+        } literal;
+    } u;
+    struct Node* next;
+};
+
+typedef struct Node Node;
+
 static CorgiStatus
-parse(Storage** storage, CorgiChar* begin, CorgiChar* end, CorgiCode** code)
+create_node(Storage** storage, NodeType type, Node** node)
+{
+    *node = alloc_from_storage(storage, sizeof(Node));
+    if (*node == NULL) {
+        return CORGI_ERR_OUT_OF_MEMORY;
+    }
+    bzero(*node, sizeof(Node));
+    (*node)->type = type;
+    (*node)->next = NULL;
+    return CORGI_OK;
+}
+
+static CorgiStatus
+parse_single_pattern(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
+{
+    CorgiStatus status = create_node(storage, NODE_LITERAL, node);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    (*node)->u.literal.c = **pc;
+    (*pc)++;
+    return CORGI_OK;
+}
+
+static CorgiStatus
+parse_sub_pattern(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
+{
+    CorgiStatus status = parse_single_pattern(storage, pc, end, node);
+    if (status != CORGI_OK) {
+        return status;
+    }
+
+    Node* prev = *node;
+    while ((*pc < end) && (status == CORGI_OK)) {
+        Node* node = NULL;
+        status = parse_single_pattern(storage, pc, end, &node);
+        prev->next = node;
+        prev = node;
+    }
+
+    return status;
+}
+
+static CorgiStatus
+parse_branch(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
+{
+    CorgiStatus status = create_node(storage, NODE_BRANCH, node);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    (*node)->u.branch.left = (*node)->u.branch.right = NULL;
+
+    Node* left = NULL;
+    status = parse_sub_pattern(storage, pc, end, &left);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    (*node)->u.branch.left = left;
+
+    if ((end <= (*pc)) || ((**pc) != '|')) {
+        return CORGI_OK;
+    }
+    (*pc)++;
+
+    Node* right = NULL;
+    status = parse_sub_pattern(storage, pc, end, &right);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    (*node)->u.branch.right = right;
+
+    return CORGI_OK;
+}
+
+static CorgiStatus
+node2code(Storage** storage, Node* node, CorgiCode** code)
 {
     return CORGI_OK;
+}
+
+static CorgiStatus
+compile_with_storage(Storage** storage, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end, CorgiCode** code)
+{
+    Node* node = NULL; /* gcc dislike uninitialized */
+    CorgiChar* pc = begin;
+    CorgiStatus status = parse_branch(storage, &pc, end, &node);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    return node2code(storage, node, code);
 }
 
 CorgiStatus
 corgi_compile(CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end)
 {
     Storage* storage = alloc_storage(NULL);
-    CorgiCode* code = NULL; /* gcc dislike uninitialized */
-    CorgiStatus status = parse(&storage, begin, end, &code);
+    CorgiCode* code = NULL;
+    CorgiStatus status = compile_with_storage(&storage, regexp, begin, end, &code);
     free_storage(storage);
     if (status != CORGI_OK) {
         return status;
