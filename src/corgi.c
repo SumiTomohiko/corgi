@@ -1963,11 +1963,23 @@ free_storage(Storage* storage)
     }
 }
 
+static CorgiStatus
+parse(Storage** storage, CorgiChar* begin, CorgiChar* end, CorgiCode** code)
+{
+    return CORGI_OK;
+}
+
 CorgiStatus
 corgi_compile(CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end)
 {
     Storage* storage = alloc_storage(NULL);
+    CorgiCode* code = NULL; /* gcc dislike uninitialized */
+    CorgiStatus status = parse(&storage, begin, end, &code);
     free_storage(storage);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    regexp->code = code;
     return CORGI_OK;
 }
 
