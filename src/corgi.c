@@ -50,6 +50,7 @@
 #define SRE_ERROR_RECURSION_LIMIT   -3  /* runaway recursion */
 #define SRE_ERROR_MEMORY            -9  /* out of memory */
 #define SRE_ERROR_INTERRUPTED       -10 /* signal handler raised exception */
+#define ERR_OUT_OF_MEMORY 1
 
 #if 0
 #   define VERBOSE
@@ -1991,7 +1992,7 @@ create_node(Storage** storage, NodeType type, Node** node)
 {
     *node = alloc_from_storage(storage, sizeof(Node));
     if (*node == NULL) {
-        return CORGI_ERR_OUT_OF_MEMORY;
+        return ERR_OUT_OF_MEMORY;
     }
     bzero(*node, sizeof(Node));
     (*node)->type = type;
