@@ -2067,6 +2067,7 @@ enum InstructionType {
     INST_BRANCH,
     INST_JUMP,
     INST_LABEL,
+    INST_LITERAL,
     INST_OFFSET,
 };
 
@@ -2112,6 +2113,10 @@ create_label(Storage** storage, Instruction** inst)
 static Instruction*
 get_last_instruction(Instruction* inst)
 {
+    if (inst == NULL) {
+        return NULL;
+    }
+
     Instruction* i = inst;
     while (i->next != NULL) {
         i = i->next;
@@ -2204,11 +2209,16 @@ branch2instruction(Storage** storage, Node* node, Instruction** inst)
 static CorgiStatus
 literal2instruction(Storage** storage, Node* node, Instruction** inst)
 {
+    CorgiStatus status = create_instruction(storage, INST_LITERAL, inst);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    (*inst)->u.literal.c = node->u.literal.c;
     return CORGI_OK;
 }
 
 static CorgiStatus
-node2instruction(Storage** storage, Node* node, Instruction** instruction)
+single_node2instruction(Storage** storage, Node* node, Instruction** inst)
 {
     CorgiStatus (*f)(Storage**, Node*, Instruction**);
     switch (node->type) {
@@ -2221,7 +2231,28 @@ node2instruction(Storage** storage, Node* node, Instruction** instruction)
     default:
         return ERR_INVALID_NODE;
     }
-    return f(storage, node, instruction);
+    return f(storage, node, inst);
+}
+
+static CorgiStatus
+node2instruction(Storage** storage, Node* node, Instruction** inst)
+{
+    CorgiStatus status = single_node2instruction(storage, node, inst);
+    if (status != CORGI_OK) {
+        return status;
+    }
+
+    Instruction* rear = get_last_instruction(*inst);
+    Node* n = node->next;
+    while ((n != NULL) && (status == CORGI_OK)) {
+        Instruction* i = NULL;
+        status = single_node2instruction(storage, n, &i);
+        rear->next = i;
+
+        rear = get_last_instruction(i);
+        n = n->next;
+    }
+    return status;
 }
 
 static CorgiStatus
