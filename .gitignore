@@ -17,7 +17,10 @@ config.sub
 configure
 core
 depcomp
-include
+include/corgi/config.h
+include/corgi/config.h.in
+include/corgi/config.h.in~
+include/corgi/stamp-h1
 install-sh
 libtool
 ltmain.sh
