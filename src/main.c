@@ -1,13 +1,14 @@
+#include "corgi/config.h"
 #include <alloca.h>
 #include <getopt.h>
 #include <stdio.h>
-
-#include <corgi.h>
+#include <string.h>
+#include "corgi.h"
 
 static void
 usage()
 {
-    printf("test-corgi [-h|--help] <regexp> <string>\n");
+    printf("corgi [-h|--help] <regexp> <string>\n");
 }
 
 static int
@@ -105,7 +106,7 @@ do_with_regexp(CorgiRegexp* regexp, const char* s, const char* t)
 }
 
 static int
-corgi_main(int argc, char* argv[])
+match_main(int argc, char* argv[])
 {
     if (argc < 2) {
         usage();
@@ -116,6 +117,20 @@ corgi_main(int argc, char* argv[])
     int ret = do_with_regexp(&regexp, argv[0], argv[1]);
     corgi_fini_regexp(&regexp);
     return ret;
+}
+
+static int
+corgi_main(int argc, char* argv[])
+{
+    if (argc < 1) {
+        usage();
+        return 1;
+    }
+    if (strcmp(argv[0], "match") == 0) {
+        return match_main(argc - 1, argv + 1);
+    }
+    usage();
+    return 1;
 }
 
 int
