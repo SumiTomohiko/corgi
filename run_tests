@@ -7,9 +7,9 @@ do
   echo "------------ ${cmd} ------------"
   "${cmd}"
   if [ "$?" = 0 ]; then
-    echo "OK"
+    echo "${cmd}: OK"
   else
-    echo "NG"
+    echo "${cmd}: NG"
   fi
 done
 
