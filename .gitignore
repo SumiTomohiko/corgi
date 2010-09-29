@@ -23,4 +23,5 @@ libtool
 ltmain.sh
 m4
 missing
+src/corgi
 tests/test-corgi
