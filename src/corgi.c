@@ -1385,10 +1385,9 @@ static void
 state_init(State* state, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end, CorgiChar* at)
 {
     memset(state, 0, sizeof(State));
-    state->lastmark = -1;
-    state->lastindex = -1;
+    state->lastmark = state->lastindex = -1;
     state->beginning = begin;
-    state->start = at;
+    state->ptr = state->start = at;
     state->end = end;
 }
 
@@ -2285,7 +2284,7 @@ get_instruction_size(Instruction* inst)
     return sizeof(CorgiCode) * (1 + get_operands_number(inst));
 }
 
-static void
+static CorgiUInt
 compute_instruction_position(Instruction* inst)
 {
     CorgiUInt pos = 0;
@@ -2295,12 +2294,61 @@ compute_instruction_position(Instruction* inst)
         pos += get_instruction_size(i);
         i = i->next;
     }
+    return pos;
+}
+
+static void
+write_code(CorgiCode** code, Instruction* inst)
+{
+    switch (inst->type) {
+    case INST_BRANCH:
+        **code = SRE_OP_BRANCH;
+        (*code)++;
+        break;
+    case INST_JUMP:
+        **code = SRE_OP_JUMP;
+        (*code)++;
+        **code = inst->u.jump.dest->pos;
+        (*code)++;
+        break;
+    case INST_LABEL:
+        break;
+    case INST_LITERAL:
+        **code = SRE_OP_LITERAL;
+        (*code)++;
+        **code = inst->u.literal.c;
+        (*code)++;
+        break;
+    case INST_OFFSET:
+        **code = inst->u.offset.dest->pos;
+        (*code)++;
+        break;
+    default:
+        assert(FALSE);
+    }
+}
+
+static void
+instruction2binary(CorgiCode* code, Instruction* inst)
+{
+    CorgiCode** p = &code;
+    Instruction* i = inst;
+    while (i != NULL) {
+        write_code(p, i);
+        i = i->next;
+    }
 }
 
 static CorgiStatus
 instruction2code(Instruction* inst, CorgiCode** code)
 {
-    compute_instruction_position(inst);
+    CorgiUInt size = compute_instruction_position(inst);
+    *code = (CorgiCode*)malloc(size);
+    if (*code == NULL) {
+        return ERR_OUT_OF_MEMORY;
+    }
+    instruction2binary(*code, inst);
+
     return CORGI_OK;
 }
 
