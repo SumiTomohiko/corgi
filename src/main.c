@@ -5,6 +5,13 @@
 #include <string.h>
 #include "corgi.h"
 
+#define TRACE(...) do { \
+    fprintf(stderr, "%s:%u ", __FILE__, __LINE__); \
+    fprintf(stderr, __VA_ARGS__); \
+    fprintf(stderr, "\n"); \
+    fflush(stderr); \
+} while (0)
+
 static void
 usage()
 {
