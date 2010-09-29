@@ -2076,6 +2076,7 @@ typedef enum InstructionType InstructionType;
 
 struct Instruction {
     enum InstructionType type;
+    CorgiUInt pos;
     union {
         struct {
             struct Instruction* dest;
@@ -2101,7 +2102,6 @@ create_instruction(Storage** storage, InstructionType type, Instruction** inst)
     }
     bzero(*inst, sizeof(**inst));
     (*inst)->type = type;
-    (*inst)->next = NULL;
     return CORGI_OK;
 }
 
@@ -2256,9 +2256,51 @@ node2instruction(Storage** storage, Node* node, Instruction** inst)
     return status;
 }
 
+static CorgiUInt
+get_operands_number(Instruction* inst)
+{
+    switch (inst->type) {
+    case INST_BRANCH:
+        return 0;
+    case INST_JUMP:
+        return 1;
+    case INST_LITERAL:
+        return 1;
+    case INST_OFFSET:
+        return 0;
+    case INST_LABEL:
+    default:
+        assert(FALSE);
+    }
+
+    return 0; /* gcc dislike this function without this statement */
+}
+
+static CorgiUInt
+get_instruction_size(Instruction* inst)
+{
+    if (inst->type == INST_LABEL) {
+        return 0;
+    }
+    return sizeof(CorgiCode) * (1 + get_operands_number(inst));
+}
+
+static void
+compute_instruction_position(Instruction* inst)
+{
+    CorgiUInt pos = 0;
+    Instruction* i = inst;
+    while (i != NULL) {
+        i->pos = pos;
+        pos += get_instruction_size(i);
+        i = i->next;
+    }
+}
+
 static CorgiStatus
 instruction2code(Instruction* inst, CorgiCode** code)
 {
+    compute_instruction_position(inst);
     return CORGI_OK;
 }
 
