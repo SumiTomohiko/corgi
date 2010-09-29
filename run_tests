@@ -2,7 +2,7 @@
 
 tests_dir="`pwd`/tests"
 export CORGI="`pwd`/src/corgi"
-find "${tests_dir}" -perm 0755 -name "test_*" | while read cmd
+find "${tests_dir}" -perm 0755 -name "test_*" | sort | while read cmd
 do
   echo "------------ ${cmd} ------------"
   "${cmd}"
