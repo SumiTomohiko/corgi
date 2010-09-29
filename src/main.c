@@ -122,7 +122,7 @@ int
 main(int argc, char* argv[])
 {
     struct option longopts[] = {
-        { "--help", no_argument, NULL, 'h' },
+        { "help", no_argument, NULL, 'h' },
         { 0, 0, 0, 0 },
     };
     int opt;
