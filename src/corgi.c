@@ -2049,6 +2049,7 @@ parse_branch(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
     (*node)->u.branch.left = left;
 
     if ((end <= (*pc)) || ((**pc) != '|')) {
+        *node = left;
         return CORGI_OK;
     }
     (*pc)++;
