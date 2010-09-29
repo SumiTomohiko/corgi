@@ -8,7 +8,12 @@
 static void
 usage()
 {
-    printf("corgi [-h|--help] <regexp> <string>\n");
+    printf("corgi OPTIONS COMMAND ...\n");
+    printf("OPTIONS:\n");
+    printf("  --help, -h:\n");
+    printf("COMMAND:\n");
+    printf("  dump <regexp>\n");
+    printf("  match <regexp> <string>\n");
 }
 
 static int
@@ -120,14 +125,36 @@ match_main(int argc, char* argv[])
 }
 
 static int
+dump_main(int argc, char* argv[])
+{
+    if (argc < 1) {
+        usage();
+        return 1;
+    }
+    int size = count_chars(argv[0]);
+    CorgiChar* re = alloca(sizeof(CorgiChar) * size);
+    conv_utf8_to_utf32(re, argv[0]);
+    if (corgi_dump(re, re + size) != CORGI_OK) {
+        return 1;
+    }
+    return 0;
+}
+
+static int
 corgi_main(int argc, char* argv[])
 {
     if (argc < 1) {
         usage();
         return 1;
     }
-    if (strcmp(argv[0], "match") == 0) {
-        return match_main(argc - 1, argv + 1);
+    const char* cmd = argv[0];
+    int cmd_argc = argc - 1;
+    char** cmd_argv = argv + 1;
+    if (strcmp(cmd, "match") == 0) {
+        return match_main(cmd_argc, cmd_argv);
+    }
+    if (strcmp(cmd, "dump") == 0) {
+        return dump_main(cmd_argc, cmd_argv);
     }
     usage();
     return 1;

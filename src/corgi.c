@@ -2263,7 +2263,7 @@ instruction2code(Instruction* inst, CorgiCode** code)
 }
 
 static CorgiStatus
-compile_with_storage(Storage** storage, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end, CorgiCode** code)
+parse_to_instruction(Storage** storage, CorgiChar* begin, CorgiChar* end, Instruction** inst)
 {
     Node* node = NULL; /* gcc dislike uninitialized */
     CorgiChar* pc = begin;
@@ -2271,8 +2271,14 @@ compile_with_storage(Storage** storage, CorgiRegexp* regexp, CorgiChar* begin, C
     if (status != CORGI_OK) {
         return status;
     }
+    return node2instruction(storage, node, inst);
+}
+
+static CorgiStatus
+compile_with_storage(Storage** storage, CorgiChar* begin, CorgiChar* end, CorgiCode** code)
+{
     Instruction* inst = NULL;
-    status = node2instruction(storage, node, &inst);
+    CorgiStatus status = parse_to_instruction(storage, begin, end, &inst);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2284,7 +2290,7 @@ corgi_compile(CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end)
 {
     Storage* storage = alloc_storage(NULL);
     CorgiCode* code = NULL;
-    CorgiStatus status = compile_with_storage(&storage, regexp, begin, end, &code);
+    CorgiStatus status = compile_with_storage(&storage, begin, end, &code);
     free_storage(storage);
     if (status != CORGI_OK) {
         return status;
@@ -2301,6 +2307,58 @@ corgi_match(CorgiMatch* match, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar*
     CorgiInt ret = sre_match(&state, regexp->code);
     state_fini(&state);
     return ret == 0 ? CORGI_OK : 42;
+}
+
+static void
+dump_instruction(Instruction* inst)
+{
+    CorgiChar c;
+    switch (inst->type) {
+    case INST_BRANCH:
+        printf("BRANCH\n");
+        break;
+    case INST_JUMP:
+        printf("JUMP\n");
+        break;
+    case INST_LABEL:
+        printf("LABEL\n");
+        break;
+    case INST_LITERAL:
+        c = inst->u.literal.c;
+        printf("LITERAL '%c'\n", isprint(c) ? c : ' ');
+        break;
+    case INST_OFFSET:
+        printf("OFFSET\n");
+        break;
+    default:
+        printf("UNKNOWN\n");
+        break;
+    }
+}
+
+static CorgiStatus
+dump_with_storage(Storage** storage, CorgiChar* begin, CorgiChar* end)
+{
+    Instruction* inst = NULL;
+    CorgiStatus status = parse_to_instruction(storage, begin, end, &inst);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    Instruction* i = inst;
+    while (i != NULL) {
+        dump_instruction(i);
+        i = i->next;
+    }
+    return CORGI_OK;
+}
+
+CorgiStatus
+corgi_dump(CorgiChar* begin, CorgiChar* end)
+{
+    Storage* storage = alloc_storage(NULL);
+    CorgiStatus status = dump_with_storage(&storage, begin, end);
+    free_storage(storage);
+    return status;
 }
 
 /**
