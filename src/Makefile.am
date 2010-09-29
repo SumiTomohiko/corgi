@@ -15,6 +15,6 @@ entries.inc indexes.inc linebreaks.inc whitespaces.inc: $(UNICODE_SRC)
 	$(PYTHON) $(TOOLS_DIR)/makeunicodedata.py .
 
 $(top_srcdir)/include/corgi/constants.h: $(TOOLS_DIR)/constants.py
-	$(PYTHON) $(TOOLS_DIR)/constants.py $<
+	$(PYTHON) $(TOOLS_DIR)/constants.py $@
 
 # vim: tabstop=8 shiftwidth=8 noexpandtab
