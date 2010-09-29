@@ -1,0 +1,6 @@
+#!/bin/sh
+
+. `dirname $0`/rc
+expect_ok ${CORGI} match "foo|bar" "barbazquux"
+
+# vim: tabstop=2 shiftwidth=2 expandtab softtabstop=2
