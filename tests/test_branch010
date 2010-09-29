@@ -1,6 +1,9 @@
 #!/bin/sh
 
-. `dirname $0`/rc
-expect_ok ${CORGI} match "foo|bar" "barbazquux"
+matched=`"${CORGI}" match "foo|bar" "barbazquux"`
+if [ "${matched}" != "bar" ]; then
+  exit 1
+fi
+exit 0
 
 # vim: tabstop=2 shiftwidth=2 expandtab softtabstop=2
