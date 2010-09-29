@@ -1,7 +1,8 @@
 #!/bin/sh
 
-tests_dir="`pwd`/tests"
-export CORGI="`pwd`/src/corgi"
+dir=`dirname $0`
+tests_dir="${dir}/tests"
+export CORGI="${dir}/src/corgi"
 find "${tests_dir}" -perm 0755 -name "test_*" | sort | while read cmd
 do
   echo "------------ ${cmd} ------------"
