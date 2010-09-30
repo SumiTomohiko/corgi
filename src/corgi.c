@@ -2069,6 +2069,7 @@ enum InstructionType {
     INST_LABEL,
     INST_LITERAL,
     INST_OFFSET,
+    INST_SUCCESS,
 };
 
 typedef enum InstructionType InstructionType;
@@ -2117,9 +2118,8 @@ get_last_instruction(Instruction* inst)
         return NULL;
     }
 
-    Instruction* i = inst;
-    while (i->next != NULL) {
-        i = i->next;
+    Instruction* i;
+    for (i = inst; i->next != NULL; i = i->next) {
     }
     return i;
 }
@@ -2267,6 +2267,8 @@ get_operands_number(Instruction* inst)
         return 1;
     case INST_OFFSET:
         return 0;
+    case INST_SUCCESS:
+        return 0;
     case INST_LABEL:
     default:
         assert(FALSE);
@@ -2288,11 +2290,10 @@ static CorgiUInt
 compute_instruction_position(Instruction* inst)
 {
     CorgiUInt pos = 0;
-    Instruction* i = inst;
-    while (i != NULL) {
+    Instruction* i;
+    for (i = inst; i != NULL; i = i->next) {
         i->pos = pos;
         pos += get_instruction_size(i);
-        i = i->next;
     }
     return pos;
 }
@@ -2323,6 +2324,10 @@ write_code(CorgiCode** code, Instruction* inst)
         **code = inst->u.offset.dest->pos;
         (*code)++;
         break;
+    case INST_SUCCESS:
+        **code = SRE_OP_SUCCESS;
+        (*code)++;
+        break;
     default:
         assert(FALSE);
     }
@@ -2332,10 +2337,9 @@ static void
 instruction2binary(CorgiCode* code, Instruction* inst)
 {
     CorgiCode** p = &code;
-    Instruction* i = inst;
-    while (i != NULL) {
+    Instruction* i;
+    for (i = inst; i != NULL; i = i->next) {
         write_code(p, i);
-        i = i->next;
     }
 }
 
@@ -2361,7 +2365,17 @@ parse_to_instruction(Storage** storage, CorgiChar* begin, CorgiChar* end, Instru
     if (status != CORGI_OK) {
         return status;
     }
-    return node2instruction(storage, node, inst);
+    status = node2instruction(storage, node, inst);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    Instruction* success = NULL;
+    status = create_instruction(storage, INST_SUCCESS, &success);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    get_last_instruction(*inst)->next = success;
+    return CORGI_OK;
 }
 
 static CorgiStatus
@@ -2395,6 +2409,8 @@ corgi_match(CorgiMatch* match, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar*
     State state;
     state_init(&state, regexp, begin, end, at);
     CorgiInt ret = sre_match(&state, regexp->code);
+    match->begin = state.start - state.beginning;
+    match->end = state.ptr - state.beginning;
     state_fini(&state);
     return ret == 0 ? CORGI_OK : 42;
 }
@@ -2420,6 +2436,9 @@ dump_instruction(Instruction* inst)
     case INST_OFFSET:
         printf("OFFSET\n");
         break;
+    case INST_SUCCESS:
+        printf("SUCCESS\n");
+        break;
     default:
         printf("UNKNOWN\n");
         break;
@@ -2434,10 +2453,9 @@ dump_with_storage(Storage** storage, CorgiChar* begin, CorgiChar* end)
     if (status != CORGI_OK) {
         return status;
     }
-    Instruction* i = inst;
-    while (i != NULL) {
+    Instruction* i;
+    for (i = inst; i != NULL; i = i->next) {
         dump_instruction(i);
-        i = i->next;
     }
     return CORGI_OK;
 }

@@ -38,6 +38,8 @@ struct CorgiRegexp {
 typedef struct CorgiRegexp CorgiRegexp;
 
 struct CorgiMatch {
+    CorgiUInt begin;
+    CorgiUInt end;
 };
 
 typedef struct CorgiMatch CorgiMatch;

@@ -1,5 +1,6 @@
 #include "corgi/config.h"
 #include <alloca.h>
+#include <ctype.h>
 #include <getopt.h>
 #include <stdio.h>
 #include <string.h>
@@ -41,7 +42,7 @@ get_char_bytes(const char* s)
 }
 
 static CorgiChar
-conv_char(const char* s)
+conv_utf8_char_to_utf32(const char* s)
 {
 #define GET_1_BIT(x)    ((x) & 0x01)
 #define GET_2_BITS(x)   ((x) & 0x03)
@@ -79,7 +80,7 @@ conv_utf8_to_utf32(CorgiChar* dest, const char* src)
     const char* pc;
     CorgiChar* q = dest;
     for (pc = src; *pc != '\0'; pc += get_char_bytes(pc)) {
-        *q = conv_char(pc);
+        *q = conv_utf8_char_to_utf32(pc);
         q++;
     }
 }
@@ -95,23 +96,80 @@ count_chars(const char* s)
     return n;
 }
 
+static CorgiUInt
+conv_utf32_char_to_utf8(CorgiChar c , char* dest)
+{
+    if (isascii(c)) {
+        dest[0] = c;
+        return 1;
+    }
+    if (c < 0x800) {
+        dest[0] = 0xc0 | (c >> 6);
+        dest[1] = 0x80 | (c & 0x3f);
+        return 2;
+    }
+    if (c < 0x10000) {
+        dest[0] = 0xe0 | (c >> 12);
+        dest[1] = 0x80 | ((c >> 6) & 0x3f);
+        dest[2] = 0x80 | (c & 0x3f);
+        return 3;
+    }
+    if (c < 0x200000) {
+        dest[0] = 0xf0 | (c >> 18);
+        dest[1] = 0x80 | ((c >> 12) & 0x3f);
+        dest[2] = 0x80 | ((c >> 6) & 0x3f);
+        dest[3] = 0x80 | (c & 0x3f);
+        return 4;
+    }
+    if (c < 0x4000000) {
+        dest[0] = 0xf8 | (c >> 24);
+        dest[1] = 0x80 | ((c >> 18) & 0x3f);
+        dest[2] = 0x80 | ((c >> 12) & 0x3f);
+        dest[3] = 0x80 | ((c >> 6) & 0x3f);
+        dest[4] = 0x80 | (c & 0x3f);
+        return 5;
+    }
+    dest[0] = 0xfc | (c >> 30);
+    dest[1] = 0x80 | ((c >> 24) & 0x3f);
+    dest[2] = 0x80 | ((c >> 18) & 0x3f);
+    dest[3] = 0x80 | ((c >> 12) & 0x3f);
+    dest[4] = 0x80 | ((c >> 6) & 0x3f);
+    dest[5] = 0x80 | (c & 0x3f);
+    return 6;
+}
+
+static void
+conv_utf32_to_utf8(char* s, CorgiChar* begin, CorgiChar* end)
+{
+    char* dest = s;
+    CorgiChar* src;
+    for (src = begin; src < end; src++) {
+        dest += conv_utf32_char_to_utf8(*src, dest);
+    }
+    *dest = '\0';
+}
+
 static int
-do_with_regexp(CorgiRegexp* regexp, const char* s, const char* t)
+match_with_regexp(CorgiRegexp* regexp, const char* s, const char* t)
 {
     int pattern_size = count_chars(s);
-    CorgiChar* pattern = alloca(sizeof(CorgiChar) * pattern_size);
+    CorgiChar* pattern = (CorgiChar*)alloca(sizeof(CorgiChar) * pattern_size);
     conv_utf8_to_utf32(pattern, s);
     if (corgi_compile(regexp, pattern, pattern + pattern_size) != CORGI_OK) {
         return 1;
     }
 
     int target_size = count_chars(t);
-    CorgiChar* target = alloca(sizeof(CorgiChar) * target_size);
+    CorgiChar* target = (CorgiChar*)alloca(sizeof(CorgiChar) * target_size);
     conv_utf8_to_utf32(target, t);
     CorgiMatch match;
     corgi_init_match(&match);
     CorgiChar* end = target + target_size;
     CorgiStatus status = corgi_match(&match, regexp, target, end, target);
+    CorgiUInt matched_size = match.end - match.begin;
+    char* u = (char*)alloca(6 * matched_size + 1);
+    conv_utf32_to_utf8(u, target + match.begin, target + match.end);
+    printf("%s", u);
     corgi_fini_match(&match);
 
     return status == CORGI_OK ? 0 : 1;
@@ -126,7 +184,7 @@ match_main(int argc, char* argv[])
     }
     CorgiRegexp regexp;
     corgi_init_regexp(&regexp);
-    int ret = do_with_regexp(&regexp, argv[0], argv[1]);
+    int ret = match_with_regexp(&regexp, argv[0], argv[1]);
     corgi_fini_regexp(&regexp);
     return ret;
 }
