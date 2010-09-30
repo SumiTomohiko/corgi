@@ -17,9 +17,12 @@ static void
 usage()
 {
     printf("corgi OPTIONS COMMAND ...\n");
+    printf("\n");
     printf("OPTIONS:\n");
-    printf("  --help, -h:\n");
+    printf("  --help, -h: Show this message\n");
+    printf("\n");
     printf("COMMAND:\n");
+    printf("  disassemble <regexp>\n");
     printf("  dump <regexp>\n");
     printf("  match <regexp> <string>\n");
 }
