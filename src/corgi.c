@@ -2418,31 +2418,37 @@ corgi_match(CorgiMatch* match, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar*
 static void
 dump_instruction(Instruction* inst)
 {
+    if (inst->type == INST_LABEL) {
+        return;
+    }
+
+    printf("0x%04x ", inst->pos);
     CorgiChar c;
     switch (inst->type) {
     case INST_BRANCH:
-        printf("BRANCH\n");
+        printf("BRANCH");
         break;
     case INST_JUMP:
-        printf("JUMP\n");
+        printf("JUMP 0x%04x", inst->u.jump.dest->pos);
         break;
     case INST_LABEL:
-        printf("LABEL\n");
+        assert(FALSE);
         break;
     case INST_LITERAL:
         c = inst->u.literal.c;
-        printf("LITERAL '%c'\n", isprint(c) ? c : ' ');
+        printf("LITERAL '%c'", isprint(c) ? c : ' ');
         break;
     case INST_OFFSET:
-        printf("OFFSET\n");
+        printf("OFFSET 0x%04x", inst->u.offset.dest->pos);
         break;
     case INST_SUCCESS:
-        printf("SUCCESS\n");
+        printf("SUCCESS");
         break;
     default:
-        printf("UNKNOWN\n");
+        printf("UNKNOWN");
         break;
     }
+    printf("\n");
 }
 
 static CorgiStatus
@@ -2453,6 +2459,7 @@ dump_with_storage(Storage** storage, CorgiChar* begin, CorgiChar* end)
     if (status != CORGI_OK) {
         return status;
     }
+    compute_instruction_position(inst);
     Instruction* i;
     for (i = inst; i != NULL; i = i->next) {
         dump_instruction(i);
