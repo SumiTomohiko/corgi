@@ -2021,7 +2021,7 @@ parse_sub_pattern(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node
     }
 
     Node* prev = *node;
-    while ((*pc < end) && (status == CORGI_OK)) {
+    while ((*pc < end) && (**pc != '|') && (**pc != ')') && (status == CORGI_OK)) {
         Node* node = NULL;
         status = parse_single_pattern(storage, pc, end, &node);
         prev->next = node;
