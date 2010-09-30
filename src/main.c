@@ -206,6 +206,35 @@ dump_main(int argc, char* argv[])
 }
 
 static int
+disassemble_with_regexp(CorgiRegexp* regexp, const char* s)
+{
+    int pattern_size = count_chars(s);
+    CorgiChar* pattern = (CorgiChar*)alloca(sizeof(CorgiChar) * pattern_size);
+    conv_utf8_to_utf32(pattern, s);
+    if (corgi_compile(regexp, pattern, pattern + pattern_size) != CORGI_OK) {
+        return 1;
+    }
+    if (corgi_disassemble(regexp) != CORGI_OK) {
+        return 1;
+    }
+    return 0;
+}
+
+static int
+disassemble_main(int argc, char* argv[])
+{
+    if (argc < 1) {
+        usage();
+        return 1;
+    }
+    CorgiRegexp regexp;
+    corgi_init_regexp(&regexp);
+    int ret = disassemble_with_regexp(&regexp, argv[0]);
+    corgi_fini_regexp(&regexp);
+    return ret;
+}
+
+static int
 corgi_main(int argc, char* argv[])
 {
     if (argc < 1) {
@@ -220,6 +249,9 @@ corgi_main(int argc, char* argv[])
     }
     if (strcmp(cmd, "dump") == 0) {
         return dump_main(cmd_argc, cmd_argv);
+    }
+    if (strcmp(cmd, "disassemble") == 0) {
+        return disassemble_main(cmd_argc, cmd_argv);
     }
     usage();
     return 1;

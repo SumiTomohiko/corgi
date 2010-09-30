@@ -33,6 +33,7 @@ typedef CorgiChar CorgiCode;
 
 struct CorgiRegexp {
     CorgiCode* code;
+    CorgiUInt code_size;
 };
 
 typedef struct CorgiRegexp CorgiRegexp;
@@ -45,6 +46,7 @@ struct CorgiMatch {
 typedef struct CorgiMatch CorgiMatch;
 
 CorgiStatus corgi_compile(CorgiRegexp*, CorgiChar*, CorgiChar*);
+CorgiStatus corgi_disassemble(CorgiRegexp*);
 CorgiStatus corgi_dump(CorgiChar*, CorgiChar*);
 CorgiStatus corgi_fini_match(CorgiMatch*);
 CorgiStatus corgi_fini_regexp(CorgiRegexp*);

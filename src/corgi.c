@@ -774,24 +774,18 @@ entrance:
             }
             for (; ctx->pattern[0]; ctx->pattern += ctx->pattern[0]) {
                 if ((ctx->pattern[1] == SRE_OP_LITERAL) && ((end <= ctx->ptr) || (*ctx->ptr != ctx->pattern[2]))) {
-                    printf("%s:%u\n", __FILE__, __LINE__);
                     continue;
                 }
                 if ((ctx->pattern[1] == SRE_OP_IN) && ((end <= ctx->ptr) || !sre_charset(ctx->pattern + 3, *ctx->ptr))) {
-                    printf("%s:%u\n", __FILE__, __LINE__);
                     continue;
                 }
                 state->ptr = ctx->ptr;
                 DO_JUMP(JUMP_BRANCH, jump_branch, ctx->pattern + 1);
                 if (ret) {
-                    printf("%s:%u ret=%u\n", __FILE__, __LINE__, ret);
                     if (ctx->u.rep) {
-                        printf("%s:%u\n", __FILE__, __LINE__);
                         MARK_POP_DISCARD(ctx->lastmark);
                     }
-                    printf("%s:%u\n", __FILE__, __LINE__);
                     RETURN_ON_ERROR(ret);
-                    printf("%s:%u\n", __FILE__, __LINE__);
                     RETURN_SUCCESS;
                 }
                 if (ctx->u.rep) {
@@ -2065,6 +2059,7 @@ parse_branch(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
 
 enum InstructionType {
     INST_BRANCH,
+    INST_FAILURE,
     INST_JUMP,
     INST_LABEL,
     INST_LITERAL,
@@ -2201,8 +2196,14 @@ branch2instruction(Storage** storage, Node* node, Instruction** inst)
         return status;
     }
     (*inst)->next = internal;
+    Instruction* failure = NULL;
+    status = create_instruction(storage, INST_FAILURE, &failure);
+    if (status != CORGI_OK) {
+        return status;
+    }
     Instruction* rear = get_last_instruction(internal);
-    rear->next = label;
+    rear->next = failure;
+    failure->next = label;
     return CORGI_OK;
 }
 
@@ -2261,6 +2262,8 @@ get_operands_number(Instruction* inst)
     switch (inst->type) {
     case INST_BRANCH:
         return 0;
+    case INST_FAILURE:
+        return 0;
     case INST_JUMP:
         return 1;
     case INST_LITERAL:
@@ -2283,7 +2286,7 @@ get_instruction_size(Instruction* inst)
     if (inst->type == INST_LABEL) {
         return 0;
     }
-    return sizeof(CorgiCode) * (1 + get_operands_number(inst));
+    return 1 + get_operands_number(inst);
 }
 
 static CorgiUInt
@@ -2306,10 +2309,14 @@ write_code(CorgiCode** code, Instruction* inst)
         **code = SRE_OP_BRANCH;
         (*code)++;
         break;
+    case INST_FAILURE:
+        **code = SRE_OP_FAILURE;
+        (*code)++;
+        break;
     case INST_JUMP:
         **code = SRE_OP_JUMP;
         (*code)++;
-        **code = inst->u.jump.dest->pos;
+        **code = inst->u.jump.dest->pos - inst->pos - 1;
         (*code)++;
         break;
     case INST_LABEL:
@@ -2321,7 +2328,7 @@ write_code(CorgiCode** code, Instruction* inst)
         (*code)++;
         break;
     case INST_OFFSET:
-        **code = inst->u.offset.dest->pos;
+        **code = inst->u.offset.dest->pos - inst->pos;
         (*code)++;
         break;
     case INST_SUCCESS:
@@ -2344,10 +2351,10 @@ instruction2binary(CorgiCode* code, Instruction* inst)
 }
 
 static CorgiStatus
-instruction2code(Instruction* inst, CorgiCode** code)
+instruction2code(Instruction* inst, CorgiCode** code, CorgiUInt* code_size)
 {
-    CorgiUInt size = compute_instruction_position(inst);
-    *code = (CorgiCode*)malloc(size);
+    *code_size = sizeof(CorgiCode) * compute_instruction_position(inst);
+    *code = (CorgiCode*)malloc(*code_size);
     if (*code == NULL) {
         return ERR_OUT_OF_MEMORY;
     }
@@ -2379,14 +2386,14 @@ parse_to_instruction(Storage** storage, CorgiChar* begin, CorgiChar* end, Instru
 }
 
 static CorgiStatus
-compile_with_storage(Storage** storage, CorgiChar* begin, CorgiChar* end, CorgiCode** code)
+compile_with_storage(Storage** storage, CorgiChar* begin, CorgiChar* end, CorgiCode** code, CorgiUInt* code_size)
 {
     Instruction* inst = NULL;
     CorgiStatus status = parse_to_instruction(storage, begin, end, &inst);
     if (status != CORGI_OK) {
         return status;
     }
-    return instruction2code(inst, code);
+    return instruction2code(inst, code, code_size);
 }
 
 CorgiStatus
@@ -2394,12 +2401,14 @@ corgi_compile(CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end)
 {
     Storage* storage = alloc_storage(NULL);
     CorgiCode* code = NULL;
-    CorgiStatus status = compile_with_storage(&storage, begin, end, &code);
+    CorgiUInt code_size = 0;
+    CorgiStatus status = compile_with_storage(&storage, begin, end, &code, &code_size);
     free_storage(storage);
     if (status != CORGI_OK) {
         return status;
     }
     regexp->code = code;
+    regexp->code_size = code_size;
     return CORGI_OK;
 }
 
@@ -2422,24 +2431,27 @@ dump_instruction(Instruction* inst)
         return;
     }
 
-    printf("0x%04x ", inst->pos);
+    printf("%04u ", inst->pos);
     CorgiChar c;
     switch (inst->type) {
     case INST_BRANCH:
         printf("BRANCH");
         break;
+    case INST_FAILURE:
+        printf("FAILURE");
+        break;
     case INST_JUMP:
-        printf("JUMP 0x%04x", inst->u.jump.dest->pos);
+        printf("JUMP %u", inst->u.jump.dest->pos);
         break;
     case INST_LABEL:
         assert(FALSE);
         break;
     case INST_LITERAL:
         c = inst->u.literal.c;
-        printf("LITERAL '%c'", isprint(c) ? c : ' ');
+        printf("LITERAL %8u (%c)", c, isprint(c) ? c : ' ');
         break;
     case INST_OFFSET:
-        printf("OFFSET 0x%04x", inst->u.offset.dest->pos);
+        printf("OFFSET %04u", inst->u.offset.dest->pos);
         break;
     case INST_SUCCESS:
         printf("SUCCESS");
@@ -2474,6 +2486,274 @@ corgi_dump(CorgiChar* begin, CorgiChar* end)
     CorgiStatus status = dump_with_storage(&storage, begin, end);
     free_storage(storage);
     return status;
+}
+
+static void
+disassemble_operand(int pos, CorgiCode operand)
+{
+    const char* name;
+    switch (operand) {
+    case SRE_OP_FAILURE:
+        name = "FAILURE";
+        break;
+    case SRE_OP_SUCCESS:
+        name = "SUCCESS";
+        break;
+    case SRE_OP_ANY:
+        name = "ANY";
+        break;
+    case SRE_OP_ANY_ALL:
+        name = "ANY_ALL";
+        break;
+    case SRE_OP_ASSERT:
+        name = "ASSERT";
+        break;
+    case SRE_OP_ASSERT_NOT:
+        name = "ASSERT_NOT";
+        break;
+    case SRE_OP_AT:
+        name = "AT";
+        break;
+    case SRE_OP_BRANCH:
+        name = "BRANCH";
+        break;
+    case SRE_OP_CALL:
+        name = "CALL";
+        break;
+    case SRE_OP_CATEGORY:
+        name = "CATEGORY";
+        break;
+    case SRE_OP_CHARSET:
+        name = "CHARSET";
+        break;
+    case SRE_OP_BIGCHARSET:
+        name = "BIGCHARSET";
+        break;
+    case SRE_OP_GROUPREF:
+        name = "GROUPREF";
+        break;
+    case SRE_OP_GROUPREF_EXISTS:
+        name = "GROUPREF_EXISTS";
+        break;
+    case SRE_OP_GROUPREF_IGNORE:
+        name = "GROUPREF_IGNORE";
+        break;
+    case SRE_OP_IN:
+        name = "IN";
+        break;
+    case SRE_OP_IN_IGNORE:
+        name = "IN_IGNORE";
+        break;
+    case SRE_OP_INFO:
+        name = "INFO";
+        break;
+    case SRE_OP_JUMP:
+        name = "JUMP";
+        break;
+    case SRE_OP_LITERAL:
+        name = "LITERAL";
+        break;
+    case SRE_OP_LITERAL_IGNORE:
+        name = "LITERAL_IGNORE";
+        break;
+    case SRE_OP_MARK:
+        name = "MARK";
+        break;
+    case SRE_OP_MAX_UNTIL:
+        name = "MAX_UNTIL";
+        break;
+    case SRE_OP_MIN_UNTIL:
+        name = "MIN_UNTIL";
+        break;
+    case SRE_OP_NOT_LITERAL:
+        name = "NOT_LITERAL";
+        break;
+    case SRE_OP_NOT_LITERAL_IGNORE:
+        name = "NOT_LITERAL_IGNORE";
+        break;
+    case SRE_OP_NEGATE:
+        name = "NEGATE";
+        break;
+    case SRE_OP_RANGE:
+        name = "RANGE";
+        break;
+    case SRE_OP_REPEAT:
+        name = "REPEAT";
+        break;
+    case SRE_OP_REPEAT_ONE:
+        name = "REPEAT_ONE";
+        break;
+    case SRE_OP_SUBPATTERN:
+        name = "SUBPATTERN";
+        break;
+    case SRE_OP_MIN_REPEAT_ONE:
+        name = "MIN_REPEAT_ONE";
+        break;
+    default:
+        name = "UNKNOWN";
+        break;
+    }
+    printf("%04u %s ", pos, name);
+}
+
+static void disassemble_code(CorgiCode**, CorgiCode*);
+
+static void
+disassemble_pattern(CorgiCode** p, CorgiCode* base, CorgiCode* end)
+{
+    while (*p < end) {
+        disassemble_code(p, base);
+    }
+}
+
+static void
+disassemble_branch(CorgiCode** p, CorgiCode* base)
+{
+    while (**p != 0) {
+        CorgiCode offset = **p;
+        CorgiCode* end = *p + offset;
+        printf("%04u (offset) %u\n", *p - base, offset);
+        (*p)++;
+        disassemble_pattern(p, base, end);
+    }
+}
+
+static void
+disassemble_code(CorgiCode** p, CorgiCode* base)
+{
+    CorgiCode operand = **p;
+    disassemble_operand(*p - base, operand);
+    (*p)++;
+
+    CorgiCode offset;
+    CorgiCode* end;
+    CorgiCode c;
+    switch (operand) {
+    case SRE_OP_FAILURE:
+    case SRE_OP_SUCCESS:
+        printf("\n");
+        break;
+    case SRE_OP_ANY:
+    case SRE_OP_ANY_ALL:
+        break;
+    case SRE_OP_ASSERT:
+    case SRE_OP_ASSERT_NOT:
+        offset = **p;
+        end = *p + offset;
+        printf("%u ", offset);
+        (*p)++;
+        printf("%u\n", **p);
+        (*p)++;
+        disassemble_pattern(p, base, end);
+        break;
+    case SRE_OP_AT:
+        printf("%u\n", **p);
+        (*p)++;
+        break;
+    case SRE_OP_BRANCH:
+        printf("\n");
+        disassemble_branch(p, base);
+        break;
+    case SRE_OP_CALL:
+        offset = **p;
+        end = *p + offset;
+        printf("%u\n", offset);
+        (*p)++;
+        disassemble_pattern(p, base, end);
+        break;
+    case SRE_OP_CATEGORY:
+        printf("%u", **p);
+        (*p)++;
+        break;
+    case SRE_OP_CHARSET:
+    case SRE_OP_BIGCHARSET:
+        printf("\n");
+        break;
+    case SRE_OP_GROUPREF:
+    case SRE_OP_GROUPREF_IGNORE:
+        printf("%u\n", **p);
+        (*p)++;
+        break;
+    case SRE_OP_GROUPREF_EXISTS:
+        printf("%u ", **p);
+        (*p)++;
+        printf("%u ", **p);
+        (*p)++;
+        offset = **p;
+        end = *p + offset;
+        printf("%u\n", offset);
+        (*p)++;
+        disassemble_pattern(p, base, end);
+        break;
+    case SRE_OP_IN:
+    case SRE_OP_IN_IGNORE:
+        offset = **p;
+        end = *p + offset;
+        printf("%u\n", offset);
+        (*p)++;
+        disassemble_pattern(p, base, end);
+        break;
+    case SRE_OP_INFO:
+        offset = **p;
+        end = *p + offset;
+        printf("%u\n", offset);
+        printf("...(snip)...\n");
+        *p = end;
+        break;
+    case SRE_OP_JUMP:
+        offset = **p;
+        printf("%u\n", offset);
+        (*p)++;
+        break;
+    case SRE_OP_LITERAL:
+    case SRE_OP_LITERAL_IGNORE:
+    case SRE_OP_NOT_LITERAL:
+    case SRE_OP_NOT_LITERAL_IGNORE:
+        c = **p;
+        printf("%8u (%c)\n", c, isprint(c) ? c : ' ');
+        (*p)++;
+        break;
+    case SRE_OP_MARK:
+        printf("%u\n", **p);
+        (*p)++;
+        break;
+    case SRE_OP_MAX_UNTIL:
+    case SRE_OP_MIN_UNTIL:
+        break;
+    case SRE_OP_NEGATE:
+        break;
+    case SRE_OP_RANGE:
+        printf("%u ", **p);
+        (*p)++;
+        printf("%u\n", **p);
+        (*p)++;
+        break;
+    case SRE_OP_REPEAT:
+    case SRE_OP_REPEAT_ONE:
+    case SRE_OP_MIN_REPEAT_ONE:
+        offset = **p;
+        end = *p + offset;
+        printf("%u ", offset);
+        (*p)++;
+        printf("%u ", **p);
+        (*p)++;
+        printf("%u\n", **p);
+        (*p)++;
+        disassemble_pattern(p, base, end);
+        break;
+    case SRE_OP_SUBPATTERN:
+    default:
+        printf("\n");
+        break;
+    }
+}
+
+CorgiStatus
+corgi_disassemble(CorgiRegexp* regexp)
+{
+    CorgiCode* begin = regexp->code;
+    disassemble_pattern(&begin, begin, begin + regexp->code_size);
+    return CORGI_OK;
 }
 
 /**
