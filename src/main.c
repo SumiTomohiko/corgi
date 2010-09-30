@@ -20,6 +20,7 @@ usage()
     printf("\n");
     printf("OPTIONS:\n");
     printf("  --help, -h: Show this message\n");
+    printf("  --version, -v: Show version information and exit\n");
     printf("\n");
     printf("COMMAND:\n");
     printf("  disassemble <regexp>\n");
@@ -265,13 +266,17 @@ main(int argc, char* argv[])
 {
     struct option longopts[] = {
         { "help", no_argument, NULL, 'h' },
+        { "version", no_argument, NULL, 'v' },
         { 0, 0, 0, 0 },
     };
     int opt;
-    while ((opt = getopt_long(argc, argv, "h", longopts, NULL)) != -1) {
+    while ((opt = getopt_long(argc, argv, "hv", longopts, NULL)) != -1) {
         switch (opt) {
         case 'h':
             usage();
+            return 0;
+        case 'v':
+            printf("corgi %s\n", PACKAGE_VERSION);
             return 0;
         case '?':
         default:
