@@ -1,7 +1,7 @@
 #!/bin/sh
 
 matched=`"${CORGI}" match "[0-9]" "4"`
-if [ ! -z "${matched}" ]; then
+if [ -z "${matched}" ]; then
   exit 1
 fi
 exit 0
