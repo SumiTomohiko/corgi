@@ -1253,7 +1253,6 @@ exit:
     return ret; /* should never get here */
 }
 
-#if 0
 static CorgiInt
 sre_search(State* state, CorgiCode* pattern)
 {
@@ -1390,7 +1389,6 @@ sre_search(State* state, CorgiCode* pattern)
 
     return status;
 }
-#endif
 
 static void
 state_init(State* state, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end, CorgiChar* at)
@@ -3075,6 +3073,18 @@ corgi_disassemble(CorgiRegexp* regexp)
     CorgiCode* begin = regexp->code;
     disassemble_pattern(&begin, begin, begin + regexp->code_size);
     return CORGI_OK;
+}
+
+CorgiStatus
+corgi_search(CorgiMatch* match, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end, CorgiChar* at)
+{
+    State state;
+    state_init(&state, regexp, begin, end, at);
+    CorgiInt ret = sre_search(&state, regexp->code);
+    match->begin = state.start - state.beginning;
+    match->end = state.ptr - state.beginning;
+    state_fini(&state);
+    return ret != 0 ? CORGI_OK : 42;
 }
 
 /**

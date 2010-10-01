@@ -53,6 +53,7 @@ CorgiStatus corgi_fini_regexp(CorgiRegexp*);
 CorgiStatus corgi_init_match(CorgiMatch*);
 CorgiStatus corgi_init_regexp(CorgiRegexp*);
 CorgiStatus corgi_match(CorgiMatch*, CorgiRegexp*, CorgiChar*, CorgiChar*, CorgiChar*);
+CorgiStatus corgi_search(CorgiMatch*, CorgiRegexp*, CorgiChar*, CorgiChar*, CorgiChar*);
 const char* corgi_strerror(CorgiStatus);
 
 #endif

@@ -26,6 +26,7 @@ usage()
     printf("  disassemble <regexp>\n");
     printf("  dump <regexp>\n");
     printf("  match <regexp> <string>\n");
+    printf("  search <regexp> <string>\n");
 }
 
 static int
@@ -159,8 +160,10 @@ print_error(const char* msg, CorgiStatus status)
     printf("%s: %s\n", msg, corgi_strerror(status));
 }
 
+typedef CorgiStatus (*Worker)(CorgiMatch*, CorgiRegexp*, CorgiChar*, CorgiChar*, CorgiChar*);
+
 static int
-match_with_regexp(CorgiRegexp* regexp, const char* s, const char* t)
+work_with_regexp(CorgiRegexp* regexp, const char* s, const char* t, Worker f)
 {
     int pattern_size = count_chars(s);
     CorgiChar* pattern = (CorgiChar*)alloca(sizeof(CorgiChar) * pattern_size);
@@ -177,7 +180,7 @@ match_with_regexp(CorgiRegexp* regexp, const char* s, const char* t)
     CorgiMatch match;
     corgi_init_match(&match);
     CorgiChar* end = target + target_size;
-    status = corgi_match(&match, regexp, target, end, target);
+    status = f(&match, regexp, target, end, target);
     CorgiUInt matched_size = match.end - match.begin;
     char* u = (char*)alloca(6 * matched_size + 1);
     conv_utf32_to_utf8(u, target + match.begin, target + match.end);
@@ -187,7 +190,7 @@ match_with_regexp(CorgiRegexp* regexp, const char* s, const char* t)
 }
 
 static int
-match_main(int argc, char* argv[])
+work_main(int argc, char* argv[], Worker f)
 {
     if (argc < 2) {
         usage();
@@ -195,7 +198,7 @@ match_main(int argc, char* argv[])
     }
     CorgiRegexp regexp;
     corgi_init_regexp(&regexp);
-    int ret = match_with_regexp(&regexp, argv[0], argv[1]);
+    int ret = work_with_regexp(&regexp, argv[0], argv[1], f);
     corgi_fini_regexp(&regexp);
     return ret;
 }
@@ -255,8 +258,11 @@ corgi_main(int argc, char* argv[])
     const char* cmd = argv[0];
     int cmd_argc = argc - 1;
     char** cmd_argv = argv + 1;
+    if (strcmp(cmd, "search") == 0) {
+        return work_main(cmd_argc, cmd_argv, corgi_search);
+    }
     if (strcmp(cmd, "match") == 0) {
-        return match_main(cmd_argc, cmd_argv);
+        return work_main(cmd_argc, cmd_argv, corgi_match);
     }
     if (strcmp(cmd, "dump") == 0) {
         return dump_main(cmd_argc, cmd_argv);
