@@ -1979,6 +1979,7 @@ enum NodeType {
     NODE_BRANCH,
     NODE_IN,
     NODE_LITERAL,
+    NODE_MAX_REPEAT,
     NODE_NEGATE,
     NODE_RANGE,
 };
@@ -1998,6 +1999,11 @@ struct Node {
         struct {
             CorgiChar c;
         } literal;
+        struct {
+            CorgiUInt min;
+            CorgiUInt max;
+            struct Node* body;
+        } max_repeat;
         struct {
             CorgiChar low;
             CorgiChar high;
@@ -2116,9 +2122,42 @@ parse_single_pattern(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** n
 }
 
 static CorgiStatus
+make_repeat(Storage** storage, CorgiChar** pc, CorgiChar* end, CorgiUInt min, CorgiUInt max, Node* body, Node** node)
+{
+    CorgiStatus status = create_node(storage, NODE_MAX_REPEAT, node);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    (*node)->u.max_repeat.min = min;
+    (*node)->u.max_repeat.max = max;
+    (*node)->u.max_repeat.body = body;
+    return CORGI_OK;
+}
+
+static CorgiStatus
+parse_repeat(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
+{
+    Node* n = NULL;
+    CorgiStatus status = parse_single_pattern(storage, pc, end, &n);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    if (end <= *pc) {
+        *node = n;
+        return CORGI_OK;
+    }
+    if (**pc == '*') {
+        (*pc)++;
+        return make_repeat(storage, pc, end, 0, 65535, n, node);
+    }
+    *node = n;
+    return CORGI_OK;
+}
+
+static CorgiStatus
 parse_sub_pattern(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
 {
-    CorgiStatus status = parse_single_pattern(storage, pc, end, node);
+    CorgiStatus status = parse_repeat(storage, pc, end, node);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2126,7 +2165,7 @@ parse_sub_pattern(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node
     Node* prev = *node;
     while ((*pc < end) && (**pc != '|') && (**pc != ')') && (status == CORGI_OK)) {
         Node* node = NULL;
-        status = parse_single_pattern(storage, pc, end, &node);
+        status = parse_repeat(storage, pc, end, &node);
         prev->next = node;
         prev = node;
     }
@@ -2173,9 +2212,11 @@ enum InstructionType {
     INST_JUMP,
     INST_LABEL,
     INST_LITERAL,
+    INST_MAX_UNTIL,
     INST_NEGATE,
     INST_OFFSET,
     INST_RANGE,
+    INST_REPEAT,
     INST_SUCCESS,
 };
 
@@ -2201,6 +2242,11 @@ struct Instruction {
             CorgiChar low;
             CorgiChar high;
         } range;
+        struct {
+            struct Instruction* dest;
+            CorgiUInt min;
+            CorgiUInt max;
+        } repeat;
     } u;
     struct Instruction* next;
 };
@@ -2383,6 +2429,37 @@ range2instruction(Storage** storage, Node* node, Instruction** inst)
 }
 
 static CorgiStatus
+max_repeat2instruction(Storage** storage, Node* node, Instruction** inst)
+{
+    CorgiStatus status = create_instruction(storage, INST_REPEAT, inst);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    (*inst)->u.repeat.min = node->u.max_repeat.min;
+    (*inst)->u.repeat.max = node->u.max_repeat.max;
+    Instruction* dest = NULL;
+    status = create_label(storage, &dest);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    (*inst)->u.repeat.dest = dest;
+    Instruction* i = NULL;
+    status = single_node2instruction(storage, node->u.max_repeat.body, &i);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    (*inst)->next = i;
+    get_last_instruction(i)->next = dest;
+    Instruction* max_until = NULL;
+    status = create_instruction(storage, INST_MAX_UNTIL, &max_until);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    dest->next = max_until;
+    return CORGI_OK;
+}
+
+static CorgiStatus
 single_node2instruction(Storage** storage, Node* node, Instruction** inst)
 {
     CorgiStatus (*f)(Storage**, Node*, Instruction**);
@@ -2395,6 +2472,9 @@ single_node2instruction(Storage** storage, Node* node, Instruction** inst)
         break;
     case NODE_LITERAL:
         f = literal2instruction;
+        break;
+    case NODE_MAX_REPEAT:
+        f = max_repeat2instruction;
         break;
     case NODE_NEGATE:
         return create_instruction(storage, INST_NEGATE, inst);
@@ -2442,12 +2522,16 @@ get_operands_number(Instruction* inst)
         return 1;
     case INST_LITERAL:
         return 1;
+    case INST_MAX_UNTIL:
+        return 0;
     case INST_NEGATE:
         return 0;
     case INST_OFFSET:
         return 0;
     case INST_RANGE:
         return 2;
+    case INST_REPEAT:
+        return 3;
     case INST_SUCCESS:
         return 0;
     case INST_LABEL:
@@ -2511,6 +2595,10 @@ write_code(CorgiCode** code, Instruction* inst)
         **code = inst->u.literal.c;
         (*code)++;
         break;
+    case INST_MAX_UNTIL:
+        **code = SRE_OP_MAX_UNTIL;
+        (*code)++;
+        break;
     case INST_NEGATE:
         **code = SRE_OP_NEGATE;
         (*code)++;
@@ -2525,6 +2613,16 @@ write_code(CorgiCode** code, Instruction* inst)
         **code = inst->u.range.low;
         (*code)++;
         **code = inst->u.range.high;
+        (*code)++;
+        break;
+    case INST_REPEAT:
+        **code = SRE_OP_REPEAT;
+        (*code)++;
+        **code = inst->u.repeat.dest->pos - inst->pos - 1;
+        (*code)++;
+        **code = inst->u.repeat.min;
+        (*code)++;
+        **code = inst->u.repeat.max;
         (*code)++;
         break;
     case INST_SUCCESS:
@@ -2657,6 +2755,9 @@ dump_instruction(Instruction* inst)
         c = inst->u.literal.c;
         printf("LITERAL %8u (%c)", c, char2printable(c));
         break;
+    case INST_MAX_UNTIL:
+        printf("MAX_UNTIL");
+        break;
     case INST_NEGATE:
         printf("NEGATE");
         break;
@@ -2667,6 +2768,9 @@ dump_instruction(Instruction* inst)
         low = inst->u.range.low;
         high = inst->u.range.high;
         printf("RANGE %8u (%c) %8u (%c)", low, char2printable(low), high, char2printable(high));
+        break;
+    case INST_REPEAT:
+        printf("REPEAT %04u %5u %5u", inst->u.repeat.dest->pos, inst->u.repeat.min, inst->u.repeat.max);
         break;
     case INST_SUCCESS:
         printf("SUCCESS");
@@ -2934,6 +3038,7 @@ disassemble_code(CorgiCode** p, CorgiCode* base)
         break;
     case SRE_OP_MAX_UNTIL:
     case SRE_OP_MIN_UNTIL:
+        printf("\n");
         break;
     case SRE_OP_NEGATE:
         printf("\n");
