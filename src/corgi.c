@@ -52,6 +52,22 @@
 #define SRE_ERROR_INTERRUPTED       -10 /* signal handler raised exception */
 #define ERR_OUT_OF_MEMORY   1
 #define ERR_INVALID_NODE    2
+#define ERR_BAD_RANGE       3
+
+const char*
+corgi_strerror(CorgiStatus status)
+{
+    switch (status) {
+    case ERR_OUT_OF_MEMORY:
+        return "Out of memory";
+    case ERR_INVALID_NODE:
+        return "Invalid node";
+    case ERR_BAD_RANGE:
+        return "Bad character range";
+    default:
+        return "Unknown error";
+    }
+}
 
 #if 0
 #   define VERBOSE
@@ -331,6 +347,7 @@ sre_charset(CorgiCode* set, CorgiCode ch)
         default:
             /* internal error -- there's not much we can do about it
                here, so let's just pretend it didn't match... */
+            assert(FALSE);
             abort();
         }
     }
@@ -1960,7 +1977,10 @@ free_storage(Storage* storage)
 
 enum NodeType {
     NODE_BRANCH,
+    NODE_IN,
     NODE_LITERAL,
+    NODE_NEGATE,
+    NODE_RANGE,
 };
 
 typedef enum NodeType NodeType;
@@ -1973,8 +1993,15 @@ struct Node {
             struct Node* right;
         } branch;
         struct {
+            struct Node* set;
+        } in;
+        struct {
             CorgiChar c;
         } literal;
+        struct {
+            CorgiChar low;
+            CorgiChar high;
+        } range;
     } u;
     struct Node* next;
 };
@@ -1995,13 +2022,95 @@ create_node(Storage** storage, NodeType type, Node** node)
 }
 
 static CorgiStatus
-parse_single_pattern(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
+create_literal_node(Storage** storage, CorgiChar c, Node** node)
 {
     CorgiStatus status = create_node(storage, NODE_LITERAL, node);
     if (status != CORGI_OK) {
         return status;
     }
-    (*node)->u.literal.c = **pc;
+    (*node)->u.literal.c = c;
+    return CORGI_OK;
+}
+
+static CorgiStatus
+create_two_literal_nodes(Storage** storage, CorgiChar c1, CorgiChar c2, Node** node)
+{
+    CorgiStatus status = create_literal_node(storage, c1, node);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    Node* next = NULL;
+    status = create_literal_node(storage, c2, &next);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    (*node)->next = next;
+    return CORGI_OK;
+}
+
+static CorgiStatus
+parse_in_internal(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
+{
+    CorgiChar c = **pc;
+    (*pc)++;
+    if (c == '^') {
+        return create_node(storage, NODE_NEGATE, node);
+    }
+    if ((end <= *pc) || (**pc != '-')) {
+        return create_literal_node(storage, c, node);
+    }
+    assert(**pc == '-');
+    (*pc)++;
+    if ((end <= *pc) || (**pc == ']')) {
+        return create_two_literal_nodes(storage, c, '-', node);
+    }
+    if (**pc < c) {
+        return ERR_BAD_RANGE;
+    }
+    CorgiStatus status = create_node(storage, NODE_RANGE, node);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    (*node)->u.range.low = c;
+    (*node)->u.range.high = **pc;
+    (*pc)++;
+    return CORGI_OK;
+}
+
+static CorgiStatus
+parse_in(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
+{
+    CorgiStatus status = create_node(storage, NODE_IN, node);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    Node** last = &(*node)->u.in.set;
+    while ((status == CORGI_OK) && (*pc < end) && (**pc != ']')) {
+        Node* node = NULL;
+        status = parse_in_internal(storage, pc, end, &node);
+        *last = node;
+        last = &node->next;
+    }
+    if ((status != CORGI_OK) || (end <= *pc)) {
+        return status;
+    }
+    assert(**pc == ']');
+    (*pc)++;
+    return CORGI_OK;
+}
+
+static CorgiStatus
+parse_single_pattern(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
+{
+    if (**pc == '[') {
+        (*pc)++;
+        return parse_in(storage, pc, end, node);
+    }
+
+    CorgiStatus status = create_literal_node(storage, **pc, node);
+    if (status != CORGI_OK) {
+        return status;
+    }
     (*pc)++;
     return CORGI_OK;
 }
@@ -2060,10 +2169,13 @@ parse_branch(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
 enum InstructionType {
     INST_BRANCH,
     INST_FAILURE,
+    INST_IN,
     INST_JUMP,
     INST_LABEL,
     INST_LITERAL,
+    INST_NEGATE,
     INST_OFFSET,
+    INST_RANGE,
     INST_SUCCESS,
 };
 
@@ -2075,6 +2187,9 @@ struct Instruction {
     union {
         struct {
             struct Instruction* dest;
+        } in;
+        struct {
+            struct Instruction* dest;
         } jump;
         struct {
             CorgiChar c;
@@ -2082,6 +2197,10 @@ struct Instruction {
         struct {
             struct Instruction* dest;
         } offset;
+        struct {
+            CorgiChar low;
+            CorgiChar high;
+        } range;
     } u;
     struct Instruction* next;
 };
@@ -2177,6 +2296,39 @@ branch_children2instruction(Storage** storage, Node* node, Instruction* branch_l
     return CORGI_OK;
 }
 
+static CorgiStatus single_node2instruction(Storage**, Node*, Instruction**);
+
+static CorgiStatus
+in2instruction(Storage** storage, Node* node, Instruction** inst)
+{
+    CorgiStatus status = create_instruction(storage, INST_IN, inst);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    Instruction* dest = NULL;
+    status = create_label(storage, &dest);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    (*inst)->u.in.dest = dest;
+    Instruction* last = *inst;
+    Node* n;
+    for (n = node->u.in.set; (n != NULL) && (status == CORGI_OK); n = n->next) {
+        Instruction* i = NULL;
+        status = single_node2instruction(storage, n, &i);
+        last->next = i;
+        last = get_last_instruction(i);
+    }
+    Instruction* failure = NULL;
+    status = create_instruction(storage, INST_FAILURE, &failure);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    last->next = failure;
+    failure->next = dest;
+    return status;
+}
+
 static CorgiStatus
 branch2instruction(Storage** storage, Node* node, Instruction** inst)
 {
@@ -2219,6 +2371,18 @@ literal2instruction(Storage** storage, Node* node, Instruction** inst)
 }
 
 static CorgiStatus
+range2instruction(Storage** storage, Node* node, Instruction** inst)
+{
+    CorgiStatus status = create_instruction(storage, INST_RANGE, inst);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    (*inst)->u.range.low = node->u.range.low;
+    (*inst)->u.range.high = node->u.range.high;
+    return CORGI_OK;
+}
+
+static CorgiStatus
 single_node2instruction(Storage** storage, Node* node, Instruction** inst)
 {
     CorgiStatus (*f)(Storage**, Node*, Instruction**);
@@ -2226,8 +2390,16 @@ single_node2instruction(Storage** storage, Node* node, Instruction** inst)
     case NODE_BRANCH:
         f = branch2instruction;
         break;
+    case NODE_IN:
+        f = in2instruction;
+        break;
     case NODE_LITERAL:
         f = literal2instruction;
+        break;
+    case NODE_NEGATE:
+        return create_instruction(storage, INST_NEGATE, inst);
+    case NODE_RANGE:
+        f = range2instruction;
         break;
     default:
         return ERR_INVALID_NODE;
@@ -2264,12 +2436,18 @@ get_operands_number(Instruction* inst)
         return 0;
     case INST_FAILURE:
         return 0;
+    case INST_IN:
+        return 1;
     case INST_JUMP:
         return 1;
     case INST_LITERAL:
         return 1;
+    case INST_NEGATE:
+        return 0;
     case INST_OFFSET:
         return 0;
+    case INST_RANGE:
+        return 2;
     case INST_SUCCESS:
         return 0;
     case INST_LABEL:
@@ -2313,6 +2491,12 @@ write_code(CorgiCode** code, Instruction* inst)
         **code = SRE_OP_FAILURE;
         (*code)++;
         break;
+    case INST_IN:
+        **code = SRE_OP_IN;
+        (*code)++;
+        **code = inst->u.in.dest->pos - inst->pos - 1;
+        (*code)++;
+        break;
     case INST_JUMP:
         **code = SRE_OP_JUMP;
         (*code)++;
@@ -2327,8 +2511,20 @@ write_code(CorgiCode** code, Instruction* inst)
         **code = inst->u.literal.c;
         (*code)++;
         break;
+    case INST_NEGATE:
+        **code = SRE_OP_NEGATE;
+        (*code)++;
+        break;
     case INST_OFFSET:
         **code = inst->u.offset.dest->pos - inst->pos;
+        (*code)++;
+        break;
+    case INST_RANGE:
+        **code = SRE_OP_RANGE;
+        (*code)++;
+        **code = inst->u.range.low;
+        (*code)++;
+        **code = inst->u.range.high;
         (*code)++;
         break;
     case INST_SUCCESS:
@@ -2353,8 +2549,8 @@ instruction2binary(CorgiCode* code, Instruction* inst)
 static CorgiStatus
 instruction2code(Instruction* inst, CorgiCode** code, CorgiUInt* code_size)
 {
-    *code_size = sizeof(CorgiCode) * compute_instruction_position(inst);
-    *code = (CorgiCode*)malloc(*code_size);
+    *code_size = compute_instruction_position(inst);
+    *code = (CorgiCode*)malloc(sizeof(CorgiCode) * *code_size);
     if (*code == NULL) {
         return ERR_OUT_OF_MEMORY;
     }
@@ -2421,7 +2617,13 @@ corgi_match(CorgiMatch* match, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar*
     match->begin = state.start - state.beginning;
     match->end = state.ptr - state.beginning;
     state_fini(&state);
-    return ret == 0 ? CORGI_OK : 42;
+    return ret != 0 ? CORGI_OK : 42;
+}
+
+static CorgiChar
+char2printable(CorgiChar c)
+{
+    return isprint(c) ? c : ' ';
 }
 
 static void
@@ -2433,12 +2635,17 @@ dump_instruction(Instruction* inst)
 
     printf("%04u ", inst->pos);
     CorgiChar c;
+    CorgiChar low;
+    CorgiChar high;
     switch (inst->type) {
     case INST_BRANCH:
         printf("BRANCH");
         break;
     case INST_FAILURE:
         printf("FAILURE");
+        break;
+    case INST_IN:
+        printf("IN %u", inst->u.in.dest->pos);
         break;
     case INST_JUMP:
         printf("JUMP %u", inst->u.jump.dest->pos);
@@ -2448,10 +2655,18 @@ dump_instruction(Instruction* inst)
         break;
     case INST_LITERAL:
         c = inst->u.literal.c;
-        printf("LITERAL %8u (%c)", c, isprint(c) ? c : ' ');
+        printf("LITERAL %8u (%c)", c, char2printable(c));
+        break;
+    case INST_NEGATE:
+        printf("NEGATE");
         break;
     case INST_OFFSET:
         printf("OFFSET %04u", inst->u.offset.dest->pos);
+        break;
+    case INST_RANGE:
+        low = inst->u.range.low;
+        high = inst->u.range.high;
+        printf("RANGE %8u (%c) %8u (%c)", low, char2printable(low), high, char2printable(high));
         break;
     case INST_SUCCESS:
         printf("SUCCESS");
@@ -2721,6 +2936,7 @@ disassemble_code(CorgiCode** p, CorgiCode* base)
     case SRE_OP_MIN_UNTIL:
         break;
     case SRE_OP_NEGATE:
+        printf("\n");
         break;
     case SRE_OP_RANGE:
         printf("%u ", **p);

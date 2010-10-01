@@ -153,13 +153,21 @@ conv_utf32_to_utf8(char* s, CorgiChar* begin, CorgiChar* end)
     *dest = '\0';
 }
 
+static void
+print_error(const char* msg, CorgiStatus status)
+{
+    printf("%s: %s\n", msg, corgi_strerror(status));
+}
+
 static int
 match_with_regexp(CorgiRegexp* regexp, const char* s, const char* t)
 {
     int pattern_size = count_chars(s);
     CorgiChar* pattern = (CorgiChar*)alloca(sizeof(CorgiChar) * pattern_size);
     conv_utf8_to_utf32(pattern, s);
-    if (corgi_compile(regexp, pattern, pattern + pattern_size) != CORGI_OK) {
+    CorgiStatus status = corgi_compile(regexp, pattern, pattern + pattern_size);
+    if (status != CORGI_OK) {
+        print_error("Compile failed", status);
         return 1;
     }
 
@@ -169,13 +177,12 @@ match_with_regexp(CorgiRegexp* regexp, const char* s, const char* t)
     CorgiMatch match;
     corgi_init_match(&match);
     CorgiChar* end = target + target_size;
-    CorgiStatus status = corgi_match(&match, regexp, target, end, target);
+    status = corgi_match(&match, regexp, target, end, target);
     CorgiUInt matched_size = match.end - match.begin;
     char* u = (char*)alloca(6 * matched_size + 1);
     conv_utf32_to_utf8(u, target + match.begin, target + match.end);
     printf("%s", u);
     corgi_fini_match(&match);
-
     return status == CORGI_OK ? 0 : 1;
 }
 
