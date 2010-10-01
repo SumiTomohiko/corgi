@@ -30,4 +30,9 @@ AC_CONFIG_FILES([Makefile
                  tests/Makefile])
 AC_OUTPUT
 
+config_file="include/corgi/config.h"
+tmp_file="$$"
+sed -e "s/^#define /#define CORGI_/" < "${config_file}" > "${tmp_file}"
+mv "${tmp_file}" "${config_file}"
+
 # vim: tabstop=2 shiftwidth=2 expandtab softtabstop=2

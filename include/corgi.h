@@ -3,9 +3,9 @@
 
 #include "corgi/config.h"
 
-#if SIZEOF_INT == 4
+#if CORGI_SIZEOF_INT == 4
 #   define CHAR_TYPE int
-#elif SIZEOF_LONG == 4
+#elif CORGI_SIZEOF_LONG == 4
 #   define CHAR_TYPE long
 #else
 #   error "Cannot determine CorgiChar type"
@@ -13,11 +13,11 @@
 typedef unsigned CHAR_TYPE CorgiChar;
 #undef CHAR_TYPE
 
-#if SIZEOF_INT == SIZEOF_VOIDP
+#if CORGI_SIZEOF_INT == CORGI_SIZEOF_VOIDP
 #   define NUMBER_TYPE int
-#elif SIZEOF_LONG == SIZEOF_VOIDP
+#elif CORGI_SIZEOF_LONG == CORGI_SIZEOF_VOIDP
 #   define NUMBER_TYPE long
-#elif SIZEOF_LONG_LONG == SIZEOF_VOIDP
+#elif CORGI_SIZEOF_LONG_LONG == CORGI_SIZEOF_VOIDP
 #   define NUMBER_TYPE long long
 #else
 #   error "Cannot determine CorgiStatus type"

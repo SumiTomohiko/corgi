@@ -289,7 +289,7 @@ main(int argc, char* argv[])
             usage();
             return 0;
         case 'v':
-            printf("corgi %s\n", PACKAGE_VERSION);
+            printf("corgi %s\n", CORGI_PACKAGE_VERSION);
             return 0;
         case '?':
         default:
