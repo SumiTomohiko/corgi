@@ -69,14 +69,11 @@ corgi_strerror(CorgiStatus status)
     }
 }
 
-#if 0
-#   define VERBOSE
-#endif
-#if defined(VERBOSE)
-#   define TRACE(v) printf v
-#else
-#   define TRACE(v)
-#endif
+#define TRACE(v) do { \
+    if (state->debug) { \
+        printf v; \
+    } \
+} while (0)
 
 #define SRE_DIGIT_MASK      1
 #define SRE_SPACE_MASK      2
@@ -189,6 +186,7 @@ struct State {
     size_t data_stack_base;
     /* current repeat context */
     Repeat *repeat;
+    Bool debug;
 };
 
 typedef struct State State;
@@ -1391,13 +1389,14 @@ sre_search(State* state, CorgiCode* pattern)
 }
 
 static void
-state_init(State* state, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end, CorgiChar* at)
+state_init(State* state, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end, CorgiChar* at, Bool debug)
 {
     memset(state, 0, sizeof(State));
     state->lastmark = state->lastindex = -1;
     state->beginning = begin;
     state->ptr = state->start = at;
     state->end = end;
+    state->debug = debug;
 }
 
 static void
@@ -2705,10 +2704,10 @@ corgi_compile(CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end)
 }
 
 CorgiStatus
-corgi_match(CorgiMatch* match, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end, CorgiChar* at)
+corgi_match(CorgiMatch* match, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end, CorgiChar* at, CorgiOptions opts)
 {
     State state;
-    state_init(&state, regexp, begin, end, at);
+    state_init(&state, regexp, begin, end, at, opts & CORGI_OPT_DEBUG);
     CorgiInt ret = sre_match(&state, regexp->code);
     match->begin = state.start - state.beginning;
     match->end = state.ptr - state.beginning;
@@ -3076,10 +3075,10 @@ corgi_disassemble(CorgiRegexp* regexp)
 }
 
 CorgiStatus
-corgi_search(CorgiMatch* match, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end, CorgiChar* at)
+corgi_search(CorgiMatch* match, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end, CorgiChar* at, CorgiOptions opts)
 {
     State state;
-    state_init(&state, regexp, begin, end, at);
+    state_init(&state, regexp, begin, end, at, opts & CORGI_OPT_DEBUG);
     CorgiInt ret = sre_search(&state, regexp->code);
     match->begin = state.start - state.beginning;
     match->end = state.ptr - state.beginning;

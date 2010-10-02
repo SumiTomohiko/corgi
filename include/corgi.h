@@ -45,6 +45,9 @@ struct CorgiMatch {
 
 typedef struct CorgiMatch CorgiMatch;
 
+typedef CorgiUInt CorgiOptions;
+#define CORGI_OPT_DEBUG (1 << 0)
+
 CorgiStatus corgi_compile(CorgiRegexp*, CorgiChar*, CorgiChar*);
 CorgiStatus corgi_disassemble(CorgiRegexp*);
 CorgiStatus corgi_dump(CorgiChar*, CorgiChar*);
@@ -52,8 +55,8 @@ CorgiStatus corgi_fini_match(CorgiMatch*);
 CorgiStatus corgi_fini_regexp(CorgiRegexp*);
 CorgiStatus corgi_init_match(CorgiMatch*);
 CorgiStatus corgi_init_regexp(CorgiRegexp*);
-CorgiStatus corgi_match(CorgiMatch*, CorgiRegexp*, CorgiChar*, CorgiChar*, CorgiChar*);
-CorgiStatus corgi_search(CorgiMatch*, CorgiRegexp*, CorgiChar*, CorgiChar*, CorgiChar*);
+CorgiStatus corgi_match(CorgiMatch*, CorgiRegexp*, CorgiChar*, CorgiChar*, CorgiChar*, CorgiOptions);
+CorgiStatus corgi_search(CorgiMatch*, CorgiRegexp*, CorgiChar*, CorgiChar*, CorgiChar*, CorgiOptions);
 const char* corgi_strerror(CorgiStatus);
 
 #endif
