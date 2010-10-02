@@ -1,9 +1,0 @@
-#!/bin/sh
-
-matched=`"${CORGI}" search "o*" "foo"`
-if [ "${matched}" != "oo" ]; then
-  exit 1
-fi
-exit 0
-
-# vim: tabstop=2 shiftwidth=2 expandtab softtabstop=2
