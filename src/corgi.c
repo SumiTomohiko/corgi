@@ -53,6 +53,7 @@
 #define ERR_OUT_OF_MEMORY   1
 #define ERR_INVALID_NODE    2
 #define ERR_BAD_RANGE       3
+#define ERR_BOGUS_ESCAPE    4
 
 static CorgiChar
 char2printable(CorgiChar c)
@@ -70,6 +71,8 @@ corgi_strerror(CorgiStatus status)
         return "Invalid node";
     case ERR_BAD_RANGE:
         return "Bad character range";
+    case ERR_BOGUS_ESCAPE:
+        return "Bogus escape (end of line)";
     default:
         return "Unknown error";
     }
@@ -1982,6 +1985,7 @@ free_storage(Storage* storage)
 
 enum NodeType {
     NODE_BRANCH,
+    NODE_CATEGORY,
     NODE_IN,
     NODE_LITERAL,
     NODE_MAX_REPEAT,
@@ -1998,6 +2002,9 @@ struct Node {
             struct Node* left;
             struct Node* right;
         } branch;
+        struct {
+            CorgiCode type;
+        } category;
         struct {
             struct Node* set;
         } in;
@@ -2089,9 +2096,15 @@ parse_in_internal(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node
 }
 
 static CorgiStatus
+create_in_node(Storage** storage, Node** node)
+{
+    return create_node(storage, NODE_IN, node);
+}
+
+static CorgiStatus
 parse_in(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
 {
-    CorgiStatus status = create_node(storage, NODE_IN, node);
+    CorgiStatus status = create_in_node(storage, node);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2111,11 +2124,58 @@ parse_in(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
 }
 
 static CorgiStatus
+create_category_node(Storage** storage, CorgiCode type, Node** node)
+{
+    CorgiStatus status = create_node(storage, NODE_CATEGORY, node);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    (*node)->u.category.type = type;
+    return CORGI_OK;
+}
+
+static CorgiStatus
+create_word_node(Storage** storage, Node** node)
+{
+    CorgiStatus status = create_in_node(storage, node);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    Node* n = NULL;
+    status = create_category_node(storage, SRE_CATEGORY_UNI_WORD, &n);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    (*node)->u.in.set = n;
+    return CORGI_OK;
+}
+
+static CorgiStatus
+parse_escape(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
+{
+    if (end <= *pc) {
+        return ERR_BOGUS_ESCAPE;
+    }
+    CorgiChar c = **pc;
+    (*pc)++;
+    switch (c) {
+    case 'w':
+        return create_word_node(storage, node);
+    default:
+        return create_literal_node(storage, c, node);
+    }
+}
+
+static CorgiStatus
 parse_single_pattern(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
 {
     if (**pc == '[') {
         (*pc)++;
         return parse_in(storage, pc, end, node);
+    }
+    if (**pc == '\\') {
+        (*pc)++;
+        return parse_escape(storage, pc, end, node);
     }
 
     CorgiStatus status = create_literal_node(storage, **pc, node);
@@ -2212,6 +2272,7 @@ parse_branch(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
 
 enum InstructionType {
     INST_BRANCH,
+    INST_CATEGORY,
     INST_FAILURE,
     INST_IN,
     INST_JUMP,
@@ -2231,6 +2292,9 @@ struct Instruction {
     enum InstructionType type;
     CorgiUInt pos;
     union {
+        struct {
+            CorgiCode type;
+        } category;
         struct {
             struct Instruction* dest;
         } in;
@@ -2465,12 +2529,26 @@ max_repeat2instruction(Storage** storage, Node* node, Instruction** inst)
 }
 
 static CorgiStatus
+category2instruction(Storage** storage, Node* node, Instruction** inst)
+{
+    CorgiStatus status = create_instruction(storage, INST_CATEGORY, inst);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    (*inst)->u.category.type = node->u.category.type;
+    return CORGI_OK;
+}
+
+static CorgiStatus
 single_node2instruction(Storage** storage, Node* node, Instruction** inst)
 {
     CorgiStatus (*f)(Storage**, Node*, Instruction**);
     switch (node->type) {
     case NODE_BRANCH:
         f = branch2instruction;
+        break;
+    case NODE_CATEGORY:
+        f = category2instruction;
         break;
     case NODE_IN:
         f = in2instruction;
@@ -2519,6 +2597,8 @@ get_operands_number(Instruction* inst)
     switch (inst->type) {
     case INST_BRANCH:
         return 0;
+    case INST_CATEGORY:
+        return 1;
     case INST_FAILURE:
         return 0;
     case INST_IN:
@@ -2574,6 +2654,12 @@ write_code(CorgiCode** code, Instruction* inst)
     switch (inst->type) {
     case INST_BRANCH:
         **code = SRE_OP_BRANCH;
+        (*code)++;
+        break;
+    case INST_CATEGORY:
+        **code = SRE_OP_CATEGORY;
+        (*code)++;
+        **code = inst->u.category.type;
         (*code)++;
         break;
     case INST_FAILURE:
@@ -2723,6 +2809,51 @@ corgi_match(CorgiMatch* match, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar*
     return ret != 0 ? CORGI_OK : 42;
 }
 
+static const char*
+category_type2name(CorgiCode type)
+{
+    switch (type) {
+    case SRE_CATEGORY_DIGIT:
+        return "SRE_CATEGORY_DIGIT";
+    case SRE_CATEGORY_NOT_DIGIT:
+        return "SRE_CATEGORY_NOT_DIGIT";
+    case SRE_CATEGORY_SPACE:
+        return "SRE_IS_SPACE";
+    case SRE_CATEGORY_NOT_SPACE:
+        return "SRE_IS_NOT_SPACE";
+    case SRE_CATEGORY_WORD:
+        return "SRE_CATEGORY_WORD";
+    case SRE_CATEGORY_NOT_WORD:
+        return "SRE_CATEGORY_NOT_WORD";
+    case SRE_CATEGORY_LINEBREAK:
+        return "SRE_CATEGORY_LINEBREAK";
+    case SRE_CATEGORY_NOT_LINEBREAK:
+        return "SRE_CATEGORY_NOT_LINEBREAK";
+    case SRE_CATEGORY_LOC_WORD:
+        return "SRE_CATEGORY_LOC_WORD";
+    case SRE_CATEGORY_LOC_NOT_WORD:
+        return "SRE_CATEGORY_LOC_NOT_WORD";
+    case SRE_CATEGORY_UNI_DIGIT:
+        return "SRE_CATEGORY_UNI_DIGIT";
+    case SRE_CATEGORY_UNI_NOT_DIGIT:
+        return "SRE_CATEGORY_UNI_NOT_DIGIT";
+    case SRE_CATEGORY_UNI_SPACE:
+        return "SRE_CATEGORY_UNI_SPACE";
+    case SRE_CATEGORY_UNI_NOT_SPACE:
+        return "SRE_CATEGORY_UNI_NOT_SPACE";
+    case SRE_CATEGORY_UNI_WORD:
+        return "SRE_CATEGORY_UNI_WORD";
+    case SRE_CATEGORY_UNI_NOT_WORD:
+        return "SRE_CATEGORY_UNI_NOT_WORD";
+    case SRE_CATEGORY_UNI_LINEBREAK:
+        return "SRE_CATEGORY_UNI_LINEBREAK";
+    case SRE_CATEGORY_UNI_NOT_LINEBREAK:
+        return "SRE_CATEGORY_UNI_NOT_LINEBREAK";
+    default:
+        return "UNKNOWN";
+    }
+}
+
 static void
 dump_instruction(Instruction* inst)
 {
@@ -2734,9 +2865,14 @@ dump_instruction(Instruction* inst)
     CorgiChar c;
     CorgiChar low;
     CorgiChar high;
+    CorgiCode type;
     switch (inst->type) {
     case INST_BRANCH:
         printf("BRANCH");
+        break;
+    case INST_CATEGORY:
+        type = inst->u.category.type;
+        printf("CATEGORY %u (%s)", type, category_type2name(type));
         break;
     case INST_FAILURE:
         printf("FAILURE");
@@ -2980,7 +3116,7 @@ disassemble_code(CorgiCode** p, CorgiCode* base)
         disassemble_pattern(p, base, end);
         break;
     case SRE_OP_CATEGORY:
-        printf("%u", **p);
+        printf("%u (%s)\n", **p, category_type2name(**p));
         (*p)++;
         break;
     case SRE_OP_CHARSET:
