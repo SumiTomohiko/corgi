@@ -2135,14 +2135,14 @@ create_category_node(Storage** storage, CorgiCode type, Node** node)
 }
 
 static CorgiStatus
-create_word_node(Storage** storage, Node** node)
+create_in_with_category_node(Storage** storage, CorgiCode type, Node** node)
 {
     CorgiStatus status = create_in_node(storage, node);
     if (status != CORGI_OK) {
         return status;
     }
     Node* n = NULL;
-    status = create_category_node(storage, SRE_CATEGORY_UNI_WORD, &n);
+    status = create_category_node(storage, type, &n);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2160,7 +2160,9 @@ parse_escape(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
     (*pc)++;
     switch (c) {
     case 'w':
-        return create_word_node(storage, node);
+        return create_in_with_category_node(storage, SRE_CATEGORY_UNI_WORD, node);
+    case 'W':
+        return create_in_with_category_node(storage, SRE_CATEGORY_UNI_NOT_WORD, node);
     default:
         return create_literal_node(storage, c, node);
     }
