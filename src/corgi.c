@@ -2160,6 +2160,9 @@ parse_escape(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
     CorgiChar c = **pc;
     (*pc)++;
     switch (c) {
+    case 'S':
+        type = SRE_CATEGORY_UNI_NOT_SPACE;
+        break;
     case 'W':
         type = SRE_CATEGORY_UNI_NOT_WORD;
         break;
