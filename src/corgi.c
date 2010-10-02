@@ -2156,16 +2156,23 @@ parse_escape(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
     if (end <= *pc) {
         return ERR_BOGUS_ESCAPE;
     }
+    CorgiCode type;
     CorgiChar c = **pc;
     (*pc)++;
     switch (c) {
-    case 'w':
-        return create_in_with_category_node(storage, SRE_CATEGORY_UNI_WORD, node);
     case 'W':
-        return create_in_with_category_node(storage, SRE_CATEGORY_UNI_NOT_WORD, node);
+        type = SRE_CATEGORY_UNI_NOT_WORD;
+        break;
+    case 's':
+        type = SRE_CATEGORY_UNI_SPACE;
+        break;
+    case 'w':
+        type = SRE_CATEGORY_UNI_WORD;
+        break;
     default:
         return create_literal_node(storage, c, node);
     }
+    return create_in_with_category_node(storage, type, node);
 }
 
 static CorgiStatus
