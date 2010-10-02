@@ -184,12 +184,11 @@ work_with_regexp(CorgiRegexp* regexp, Bool debug, const char* s, const char* t, 
     conv_utf8_to_utf32(target, t);
     CorgiMatch match;
     corgi_init_match(&match);
-    CorgiChar* end = target + target_size;
     CorgiOptions opts = 0;
     if (debug) {
         opts |= CORGI_OPT_DEBUG;
     }
-    status = f(&match, regexp, target, end, target, opts);
+    status = f(&match, regexp, target, target + target_size, target, opts);
     CorgiUInt matched_size = match.end - match.begin;
     char* u = (char*)alloca(6 * matched_size + 1);
     conv_utf32_to_utf8(u, target + match.begin, target + match.end);

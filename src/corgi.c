@@ -54,6 +54,12 @@
 #define ERR_INVALID_NODE    2
 #define ERR_BAD_RANGE       3
 
+static CorgiChar
+char2printable(CorgiChar c)
+{
+    return isprint(c) ? c : ' ';
+}
+
 const char*
 corgi_strerror(CorgiStatus status)
 {
@@ -1300,7 +1306,7 @@ sre_search(State* state, CorgiCode* pattern)
         /* pattern starts with a known prefix.  use the overlap
            table to skip forward as fast as we possibly can */
         CorgiInt i = 0;
-        end = (CorgiChar*)state->end;
+        end = state->end;
         while (ptr < end) {
             for (;;) {
                 if (ptr[0] != prefix[i]) {
@@ -1336,7 +1342,7 @@ sre_search(State* state, CorgiCode* pattern)
         /* pattern starts with a literal character.  this is used
            for short prefixes, and if fast search is disabled */
         CorgiCode chr = pattern[1];
-        end = (CorgiChar*)state->end;
+        end = state->end;
         for (;;) {
             while ((ptr < end) && (ptr[0] != chr)) {
                 ptr++;
@@ -1374,7 +1380,8 @@ sre_search(State* state, CorgiCode* pattern)
             }
             ptr++;
         }
-    } else
+    }
+    else {
         /* general case */
         while (ptr <= end) {
             TRACE(("|%p|%p|SEARCH\n", pattern, ptr));
@@ -1384,6 +1391,7 @@ sre_search(State* state, CorgiCode* pattern)
                 break;
             }
         }
+    }
 
     return status;
 }
@@ -2713,12 +2721,6 @@ corgi_match(CorgiMatch* match, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar*
     match->end = state.ptr - state.beginning;
     state_fini(&state);
     return ret != 0 ? CORGI_OK : 42;
-}
-
-static CorgiChar
-char2printable(CorgiChar c)
-{
-    return isprint(c) ? c : ' ';
 }
 
 static void
