@@ -1984,6 +1984,7 @@ free_storage(Storage* storage)
 }
 
 enum NodeType {
+    NODE_AT,
     NODE_BRANCH,
     NODE_CATEGORY,
     NODE_IN,
@@ -1999,6 +2000,9 @@ typedef enum NodeType NodeType;
 struct Node {
     enum NodeType type;
     union {
+        struct {
+            CorgiCode type;
+        } at;
         struct {
             struct Node* left;
             struct Node* right;
@@ -2152,37 +2156,45 @@ create_in_with_category_node(Storage** storage, CorgiCode type, Node** node)
 }
 
 static CorgiStatus
+create_at_node(Storage** storage, CorgiCode type, Node** node)
+{
+    CorgiStatus status = create_node(storage, NODE_AT, node);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    (*node)->u.at.type = type;
+    return CORGI_OK;
+}
+
+static CorgiStatus
 parse_escape(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
 {
     if (end <= *pc) {
         return ERR_BOGUS_ESCAPE;
     }
-    CorgiCode type;
     CorgiChar c = **pc;
     (*pc)++;
     switch (c) {
+    case 'B':
+        return create_at_node(storage, SRE_AT_NON_BOUNDARY, node);
     case 'D':
-        type = SRE_CATEGORY_UNI_NOT_DIGIT;
-        break;
+        return create_in_with_category_node(storage, SRE_CATEGORY_UNI_NOT_DIGIT, node);
     case 'S':
-        type = SRE_CATEGORY_UNI_NOT_SPACE;
-        break;
+        return create_in_with_category_node(storage, SRE_CATEGORY_UNI_NOT_SPACE, node);
     case 'W':
-        type = SRE_CATEGORY_UNI_NOT_WORD;
-        break;
+        return create_in_with_category_node(storage, SRE_CATEGORY_UNI_NOT_WORD, node);
+    case 'b':
+        return create_at_node(storage, SRE_AT_BOUNDARY, node);
     case 'd':
-        type = SRE_CATEGORY_UNI_DIGIT;
-        break;
+        return create_in_with_category_node(storage, SRE_CATEGORY_UNI_DIGIT, node);
     case 's':
-        type = SRE_CATEGORY_UNI_SPACE;
-        break;
+        return create_in_with_category_node(storage, SRE_CATEGORY_UNI_SPACE, node);
     case 'w':
-        type = SRE_CATEGORY_UNI_WORD;
-        break;
+        return create_in_with_category_node(storage, SRE_CATEGORY_UNI_WORD, node);
     default:
-        return create_literal_node(storage, c, node);
+        break;
     }
-    return create_in_with_category_node(storage, type, node);
+    return create_literal_node(storage, c, node);
 }
 
 static CorgiStatus
@@ -2351,6 +2363,7 @@ parse_branch(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
 }
 
 enum InstructionType {
+    INST_AT,
     INST_BRANCH,
     INST_CATEGORY,
     INST_FAILURE,
@@ -2373,6 +2386,9 @@ struct Instruction {
     enum InstructionType type;
     CorgiUInt pos;
     union {
+        struct {
+            CorgiCode type;
+        } at;
         struct {
             CorgiCode type;
         } category;
@@ -2526,6 +2542,17 @@ in2instruction(Storage** storage, Node* node, Instruction** inst)
 }
 
 static CorgiStatus
+at2instruction(Storage** storage, Node* node, Instruction** inst)
+{
+    CorgiStatus status = create_instruction(storage, INST_AT, inst);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    (*inst)->u.at.type = node->u.at.type;
+    return CORGI_OK;
+}
+
+static CorgiStatus
 branch2instruction(Storage** storage, Node* node, Instruction** inst)
 {
     assert(node->type == NODE_BRANCH);
@@ -2637,6 +2664,9 @@ single_node2instruction(Storage** storage, Node* node, Instruction** inst)
 {
     CorgiStatus (*f)(Storage**, Node*, Instruction**);
     switch (node->type) {
+    case NODE_AT:
+        f = at2instruction;
+        break;
     case NODE_BRANCH:
         f = branch2instruction;
         break;
@@ -2691,6 +2721,8 @@ static CorgiUInt
 get_operands_number(Instruction* inst)
 {
     switch (inst->type) {
+    case INST_AT:
+        return 1;
     case INST_BRANCH:
         return 0;
     case INST_CATEGORY:
@@ -2750,6 +2782,12 @@ static void
 write_code(CorgiCode** code, Instruction* inst)
 {
     switch (inst->type) {
+    case INST_AT:
+        **code = SRE_OP_AT;
+        (*code)++;
+        **code = inst->u.at.type;
+        (*code)++;
+        break;
     case INST_BRANCH:
         **code = SRE_OP_BRANCH;
         (*code)++;
@@ -2912,6 +2950,27 @@ corgi_match(CorgiMatch* match, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar*
 }
 
 static const char*
+at_type2name(CorgiCode type)
+{
+    switch (type) {
+    case SRE_AT_BEGINNING_STRING:
+        return "SRE_AT_BEGINNING_STRING";
+    case SRE_AT_BOUNDARY:
+        return "SRE_AT_BOUNDARY";
+    case SRE_AT_NON_BOUNDARY:
+        return "SRE_AT_NON_BOUNDARY";
+    case SRE_AT_END_STRING:
+        return "SRE_AT_END_STRING";
+    case SRE_AT_BEGINNING:
+        return "SRE_AT_BEGINNING";
+    case SRE_AT_END:
+        return "SRE_AT_END";
+    default:
+        return "UNKNOWN";
+    }
+}
+
+static const char*
 category_type2name(CorgiCode type)
 {
     switch (type) {
@@ -2969,6 +3028,10 @@ dump_instruction(Instruction* inst)
     CorgiChar high;
     CorgiCode type;
     switch (inst->type) {
+    case INST_AT:
+        type = inst->u.at.type;
+        printf("AT %u (%s)", type, at_type2name(type));
+        break;
     case INST_BRANCH:
         printf("BRANCH");
         break;
