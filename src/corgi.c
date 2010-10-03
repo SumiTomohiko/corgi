@@ -2252,7 +2252,7 @@ parse_min_max_repeat(Storage** storage, CorgiChar** pc, CorgiChar* end, Node* bo
         max = parse_number(pc, end, 65535);
     }
     else {
-        max = 65535;
+        max = min;
     }
     if ((end <= *pc) || (**pc != '}')) {
         *pc = rollback;
