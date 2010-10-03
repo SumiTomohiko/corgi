@@ -1386,8 +1386,8 @@ sre_search(State* state, CorgiCode* pattern)
     }
     else {
         /* general case */
-        while (ptr <= end) {
-            TRACE(("|%p|%p|SEARCH\n", pattern, ptr));
+        while (ptr < end) {
+            TRACE(("|%p|%p(%c)|SEARCH\n", pattern, ptr, char2printable(*ptr)));
             state->start = state->ptr = ptr++;
             status = sre_match(state, pattern);
             if (status != 0) {
@@ -2175,6 +2175,8 @@ parse_escape(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
     CorgiChar c = **pc;
     (*pc)++;
     switch (c) {
+    case 'A':
+        return create_at_node(storage, SRE_AT_BEGINNING_STRING, node);
     case 'B':
         return create_at_node(storage, SRE_AT_NON_BOUNDARY, node);
     case 'D':
@@ -2183,6 +2185,8 @@ parse_escape(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
         return create_in_with_category_node(storage, SRE_CATEGORY_UNI_NOT_SPACE, node);
     case 'W':
         return create_in_with_category_node(storage, SRE_CATEGORY_UNI_NOT_WORD, node);
+    case 'Z':
+        return create_at_node(storage, SRE_AT_END_STRING, node);
     case 'b':
         return create_at_node(storage, SRE_AT_BOUNDARY, node);
     case 'd':
@@ -2207,6 +2211,11 @@ parse_single_pattern(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** n
     if (**pc == '\\') {
         (*pc)++;
         return parse_escape(storage, pc, end, node);
+    }
+    if ((**pc == '^') || (**pc == '$')) {
+        CorgiCode type = **pc == '^' ? SRE_AT_BEGINNING_LINE : SRE_AT_END_LINE;
+        (*pc)++;
+        return create_at_node(storage, type, node);
     }
 
     CorgiStatus status = create_literal_node(storage, **pc, node);
@@ -2963,8 +2972,12 @@ at_type2name(CorgiCode type)
         return "SRE_AT_END_STRING";
     case SRE_AT_BEGINNING:
         return "SRE_AT_BEGINNING";
+    case SRE_AT_BEGINNING_LINE:
+        return "SRE_AT_BEGINNING_LINE";
     case SRE_AT_END:
         return "SRE_AT_END";
+    case SRE_AT_END_LINE:
+        return "SRE_AT_END_LINE";
     default:
         return "UNKNOWN";
     }
