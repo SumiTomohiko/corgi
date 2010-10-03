@@ -3,6 +3,7 @@
 #include <ctype.h>
 #include <getopt.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "corgi.h"
 
@@ -16,6 +17,13 @@ typedef CorgiUInt Bool;
     fprintf(stderr, "\n"); \
     fflush(stderr); \
 } while (0)
+
+struct Options {
+    Bool debug;
+    CorgiUInt group_id;
+};
+
+typedef struct Options Options;
 
 static void
 usage()
@@ -167,8 +175,33 @@ print_error(const char* msg, CorgiStatus status)
 
 typedef CorgiStatus (*Worker)(CorgiMatch*, CorgiRegexp*, CorgiChar*, CorgiChar*, CorgiChar*, CorgiOptions);
 
+static CorgiStatus
+work_with_match(CorgiRegexp* regexp, CorgiMatch* match, Options* opts, const char* s, const char* t, Worker f)
+{
+    int target_size = count_chars(t);
+    CorgiChar* target = (CorgiChar*)alloca(sizeof(CorgiChar) * target_size);
+    conv_utf8_to_utf32(target, t);
+    CorgiChar* end = target + target_size;
+    CorgiOptions corgi_opts = 0;
+    if (opts->debug) {
+        corgi_opts |= CORGI_OPT_DEBUG;
+    }
+    CorgiStatus status = f(match, regexp, target, end, target, corgi_opts);
+    if (status != CORGI_OK) {
+        return 1;
+    }
+    CorgiUInt group_id = opts->group_id;
+    CorgiUInt matched_begin = match->groups[group_id].begin;
+    CorgiUInt matched_end = match->groups[group_id].end;
+    CorgiUInt matched_size = matched_end - matched_begin;
+    char* u = (char*)alloca(6 * matched_size + 1);
+    conv_utf32_to_utf8(u, target + matched_begin, target + matched_end);
+    printf("%s", u);
+    return 0;
+}
+
 static int
-work_with_regexp(CorgiRegexp* regexp, Bool debug, const char* s, const char* t, Worker f)
+work_with_regexp(CorgiRegexp* regexp, Options* opts, const char* s, const char* t, Worker f)
 {
     int pattern_size = count_chars(s);
     CorgiChar* pattern = (CorgiChar*)alloca(sizeof(CorgiChar) * pattern_size);
@@ -179,26 +212,15 @@ work_with_regexp(CorgiRegexp* regexp, Bool debug, const char* s, const char* t, 
         return 1;
     }
 
-    int target_size = count_chars(t);
-    CorgiChar* target = (CorgiChar*)alloca(sizeof(CorgiChar) * target_size);
-    conv_utf8_to_utf32(target, t);
     CorgiMatch match;
     corgi_init_match(&match);
-    CorgiOptions opts = 0;
-    if (debug) {
-        opts |= CORGI_OPT_DEBUG;
-    }
-    status = f(&match, regexp, target, target + target_size, target, opts);
-    CorgiUInt matched_size = match.end - match.begin;
-    char* u = (char*)alloca(6 * matched_size + 1);
-    conv_utf32_to_utf8(u, target + match.begin, target + match.end);
-    printf("%s", u);
+    status = work_with_match(regexp, &match, opts, s, t, f);
     corgi_fini_match(&match);
     return status == CORGI_OK ? 0 : 1;
 }
 
 static int
-work_main(Bool debug, int argc, char* argv[], Worker f)
+work_main(Options* opts, int argc, char* argv[], Worker f)
 {
     if (argc < 2) {
         usage();
@@ -206,7 +228,7 @@ work_main(Bool debug, int argc, char* argv[], Worker f)
     }
     CorgiRegexp regexp;
     corgi_init_regexp(&regexp);
-    int ret = work_with_regexp(&regexp, debug, argv[0], argv[1], f);
+    int ret = work_with_regexp(&regexp, opts, argv[0], argv[1], f);
     corgi_fini_regexp(&regexp);
     return ret;
 }
@@ -257,7 +279,7 @@ disassemble_main(int argc, char* argv[])
 }
 
 static int
-corgi_main(Bool debug, int argc, char* argv[])
+corgi_main(Options* opts, int argc, char* argv[])
 {
     if (argc < 1) {
         usage();
@@ -266,11 +288,9 @@ corgi_main(Bool debug, int argc, char* argv[])
     const char* cmd = argv[0];
     int cmd_argc = argc - 1;
     char** cmd_argv = argv + 1;
-    if (strcmp(cmd, "search") == 0) {
-        return work_main(debug, cmd_argc, cmd_argv, corgi_search);
-    }
-    if (strcmp(cmd, "match") == 0) {
-        return work_main(debug, cmd_argc, cmd_argv, corgi_match);
+    if ((strcmp(cmd, "search") == 0) || (strcmp(cmd, "match") == 0)) {
+        Worker f = strcmp(cmd, "search") == 0 ? corgi_search : corgi_match;
+        return work_main(opts, cmd_argc, cmd_argv, f);
     }
     if (strcmp(cmd, "dump") == 0) {
         return dump_main(cmd_argc, cmd_argv);
@@ -287,16 +307,21 @@ main(int argc, char* argv[])
 {
     struct option longopts[] = {
         { "debug", no_argument, NULL, 'd' },
+        { "group-id", required_argument, NULL, 'g' },
         { "help", no_argument, NULL, 'h' },
         { "version", no_argument, NULL, 'v' },
         { 0, 0, 0, 0 },
     };
-    Bool debug = FALSE;
+    Options opts;
+    bzero(&opts, sizeof(Options));
     int opt;
-    while ((opt = getopt_long(argc, argv, "dhv", longopts, NULL)) != -1) {
+    while ((opt = getopt_long(argc, argv, "dg:hv", longopts, NULL)) != -1) {
         switch (opt) {
         case 'd':
-            debug = TRUE;
+            opts.debug = TRUE;
+            break;
+        case 'g':
+            opts.group_id = atoi(optarg);
             break;
         case 'h':
             usage();
@@ -310,7 +335,7 @@ main(int argc, char* argv[])
             return 1;
         }
     }
-    return corgi_main(debug, argc - optind, argv + optind);
+    return corgi_main(&opts, argc - optind, argv + optind);
 }
 
 /**

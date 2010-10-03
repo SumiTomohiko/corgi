@@ -50,10 +50,11 @@
 #define SRE_ERROR_RECURSION_LIMIT   -3  /* runaway recursion */
 #define SRE_ERROR_MEMORY            -9  /* out of memory */
 #define SRE_ERROR_INTERRUPTED       -10 /* signal handler raised exception */
-#define ERR_OUT_OF_MEMORY   1
-#define ERR_INVALID_NODE    2
-#define ERR_BAD_RANGE       3
-#define ERR_BOGUS_ESCAPE    4
+#define ERR_OUT_OF_MEMORY           1
+#define ERR_INVALID_NODE            2
+#define ERR_BAD_RANGE               3
+#define ERR_BOGUS_ESCAPE            4
+#define ERR_PARENTHESIS_NOT_CLOSED  5
 
 static CorgiChar
 char2printable(CorgiChar c)
@@ -73,6 +74,8 @@ corgi_strerror(CorgiStatus status)
         return "Bad character range";
     case ERR_BOGUS_ESCAPE:
         return "Bogus escape (end of line)";
+    case ERR_PARENTHESIS_NOT_CLOSED:
+        return "Parenthesis not properly closed";
     default:
         return "Unknown error";
     }
@@ -188,7 +191,7 @@ struct State {
     /* registers */
     CorgiInt lastindex;
     CorgiInt lastmark;
-    void* mark[SRE_MARK_SIZE];
+    CorgiChar* mark[SRE_MARK_SIZE];
     /* dynamically allocated stuff */
     char* data_stack;
     size_t data_stack_size;
@@ -1922,8 +1925,16 @@ corgi_init_match(CorgiMatch* match)
 CorgiStatus
 corgi_fini_match(CorgiMatch* match)
 {
+    free(match->groups);
     return CORGI_OK;
 }
+
+struct Compiler {
+    struct Storage* storage;
+    CorgiUInt group_id;
+};
+
+typedef struct Compiler Compiler;
 
 struct Storage {
     struct Storage* next;
@@ -1983,6 +1994,31 @@ free_storage(Storage* storage)
     }
 }
 
+static void*
+alloc(Compiler* compiler, CorgiUInt size)
+{
+    return alloc_from_storage(&compiler->storage, size);
+}
+
+static CorgiStatus
+init_compiler(Compiler* compiler)
+{
+    bzero(compiler, sizeof(*compiler));
+    Storage* storage = alloc_storage(NULL);
+    if (storage == NULL) {
+        return ERR_OUT_OF_MEMORY;
+    }
+    compiler->storage = storage;
+    return CORGI_OK;
+}
+
+static CorgiStatus
+fini_compiler(Compiler* compiler)
+{
+    free_storage(compiler->storage);
+    return CORGI_OK;
+}
+
 enum NodeType {
     NODE_AT,
     NODE_BRANCH,
@@ -1993,6 +2029,7 @@ enum NodeType {
     NODE_MIN_REPEAT,
     NODE_NEGATE,
     NODE_RANGE,
+    NODE_SUBPATTERN,
 };
 
 typedef enum NodeType NodeType;
@@ -2025,6 +2062,10 @@ struct Node {
             CorgiChar low;
             CorgiChar high;
         } range;
+        struct {
+            CorgiUInt group_id;
+            struct Node* node;
+        } subpattern;
     } u;
     struct Node* next;
 };
@@ -2032,9 +2073,9 @@ struct Node {
 typedef struct Node Node;
 
 static CorgiStatus
-create_node(Storage** storage, NodeType type, Node** node)
+create_node(Compiler* compiler, NodeType type, Node** node)
 {
-    *node = alloc_from_storage(storage, sizeof(**node));
+    *node = alloc(compiler, sizeof(**node));
     if (*node == NULL) {
         return ERR_OUT_OF_MEMORY;
     }
@@ -2045,9 +2086,9 @@ create_node(Storage** storage, NodeType type, Node** node)
 }
 
 static CorgiStatus
-create_literal_node(Storage** storage, CorgiChar c, Node** node)
+create_literal_node(Compiler* compiler, CorgiChar c, Node** node)
 {
-    CorgiStatus status = create_node(storage, NODE_LITERAL, node);
+    CorgiStatus status = create_node(compiler, NODE_LITERAL, node);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2056,14 +2097,14 @@ create_literal_node(Storage** storage, CorgiChar c, Node** node)
 }
 
 static CorgiStatus
-create_two_literal_nodes(Storage** storage, CorgiChar c1, CorgiChar c2, Node** node)
+create_two_literal_nodes(Compiler* compiler, CorgiChar c1, CorgiChar c2, Node** node)
 {
-    CorgiStatus status = create_literal_node(storage, c1, node);
+    CorgiStatus status = create_literal_node(compiler, c1, node);
     if (status != CORGI_OK) {
         return status;
     }
     Node* next = NULL;
-    status = create_literal_node(storage, c2, &next);
+    status = create_literal_node(compiler, c2, &next);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2072,25 +2113,25 @@ create_two_literal_nodes(Storage** storage, CorgiChar c1, CorgiChar c2, Node** n
 }
 
 static CorgiStatus
-parse_in_internal(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
+parse_in_internal(Compiler* compiler, CorgiChar** pc, CorgiChar* end, Node** node)
 {
     CorgiChar c = **pc;
     (*pc)++;
     if (c == '^') {
-        return create_node(storage, NODE_NEGATE, node);
+        return create_node(compiler, NODE_NEGATE, node);
     }
     if ((end <= *pc) || (**pc != '-')) {
-        return create_literal_node(storage, c, node);
+        return create_literal_node(compiler, c, node);
     }
     assert(**pc == '-');
     (*pc)++;
     if ((end <= *pc) || (**pc == ']')) {
-        return create_two_literal_nodes(storage, c, '-', node);
+        return create_two_literal_nodes(compiler, c, '-', node);
     }
     if (**pc < c) {
         return ERR_BAD_RANGE;
     }
-    CorgiStatus status = create_node(storage, NODE_RANGE, node);
+    CorgiStatus status = create_node(compiler, NODE_RANGE, node);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2101,22 +2142,22 @@ parse_in_internal(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node
 }
 
 static CorgiStatus
-create_in_node(Storage** storage, Node** node)
+create_in_node(Compiler* compiler, Node** node)
 {
-    return create_node(storage, NODE_IN, node);
+    return create_node(compiler, NODE_IN, node);
 }
 
 static CorgiStatus
-parse_in(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
+parse_in(Compiler* compiler, CorgiChar** pc, CorgiChar* end, Node** node)
 {
-    CorgiStatus status = create_in_node(storage, node);
+    CorgiStatus status = create_in_node(compiler, node);
     if (status != CORGI_OK) {
         return status;
     }
     Node** last = &(*node)->u.in.set;
     while ((status == CORGI_OK) && (*pc < end) && (**pc != ']')) {
         Node* node = NULL;
-        status = parse_in_internal(storage, pc, end, &node);
+        status = parse_in_internal(compiler, pc, end, &node);
         *last = node;
         last = &node->next;
     }
@@ -2129,9 +2170,9 @@ parse_in(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
 }
 
 static CorgiStatus
-create_category_node(Storage** storage, CorgiCode type, Node** node)
+create_category_node(Compiler* compiler, CorgiCode type, Node** node)
 {
-    CorgiStatus status = create_node(storage, NODE_CATEGORY, node);
+    CorgiStatus status = create_node(compiler, NODE_CATEGORY, node);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2140,14 +2181,14 @@ create_category_node(Storage** storage, CorgiCode type, Node** node)
 }
 
 static CorgiStatus
-create_in_with_category_node(Storage** storage, CorgiCode type, Node** node)
+create_in_with_category_node(Compiler* compiler, CorgiCode type, Node** node)
 {
-    CorgiStatus status = create_in_node(storage, node);
+    CorgiStatus status = create_in_node(compiler, node);
     if (status != CORGI_OK) {
         return status;
     }
     Node* n = NULL;
-    status = create_category_node(storage, type, &n);
+    status = create_category_node(compiler, type, &n);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2156,9 +2197,9 @@ create_in_with_category_node(Storage** storage, CorgiCode type, Node** node)
 }
 
 static CorgiStatus
-create_at_node(Storage** storage, CorgiCode type, Node** node)
+create_at_node(Compiler* compiler, CorgiCode type, Node** node)
 {
-    CorgiStatus status = create_node(storage, NODE_AT, node);
+    CorgiStatus status = create_node(compiler, NODE_AT, node);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2167,7 +2208,7 @@ create_at_node(Storage** storage, CorgiCode type, Node** node)
 }
 
 static CorgiStatus
-parse_escape(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
+parse_escape(Compiler* compiler, CorgiChar** pc, CorgiChar* end, Node** node)
 {
     if (end <= *pc) {
         return ERR_BOGUS_ESCAPE;
@@ -2176,49 +2217,77 @@ parse_escape(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
     (*pc)++;
     switch (c) {
     case 'A':
-        return create_at_node(storage, SRE_AT_BEGINNING_STRING, node);
+        return create_at_node(compiler, SRE_AT_BEGINNING_STRING, node);
     case 'B':
-        return create_at_node(storage, SRE_AT_NON_BOUNDARY, node);
+        return create_at_node(compiler, SRE_AT_NON_BOUNDARY, node);
     case 'D':
-        return create_in_with_category_node(storage, SRE_CATEGORY_UNI_NOT_DIGIT, node);
+        return create_in_with_category_node(compiler, SRE_CATEGORY_UNI_NOT_DIGIT, node);
     case 'S':
-        return create_in_with_category_node(storage, SRE_CATEGORY_UNI_NOT_SPACE, node);
+        return create_in_with_category_node(compiler, SRE_CATEGORY_UNI_NOT_SPACE, node);
     case 'W':
-        return create_in_with_category_node(storage, SRE_CATEGORY_UNI_NOT_WORD, node);
+        return create_in_with_category_node(compiler, SRE_CATEGORY_UNI_NOT_WORD, node);
     case 'Z':
-        return create_at_node(storage, SRE_AT_END_STRING, node);
+        return create_at_node(compiler, SRE_AT_END_STRING, node);
     case 'b':
-        return create_at_node(storage, SRE_AT_BOUNDARY, node);
+        return create_at_node(compiler, SRE_AT_BOUNDARY, node);
     case 'd':
-        return create_in_with_category_node(storage, SRE_CATEGORY_UNI_DIGIT, node);
+        return create_in_with_category_node(compiler, SRE_CATEGORY_UNI_DIGIT, node);
     case 's':
-        return create_in_with_category_node(storage, SRE_CATEGORY_UNI_SPACE, node);
+        return create_in_with_category_node(compiler, SRE_CATEGORY_UNI_SPACE, node);
     case 'w':
-        return create_in_with_category_node(storage, SRE_CATEGORY_UNI_WORD, node);
+        return create_in_with_category_node(compiler, SRE_CATEGORY_UNI_WORD, node);
     default:
         break;
     }
-    return create_literal_node(storage, c, node);
+    return create_literal_node(compiler, c, node);
+}
+
+static CorgiStatus parse_branch(Compiler*, CorgiChar**, CorgiChar*, Node**);
+
+static CorgiStatus
+parse_group(Compiler* compiler, CorgiChar** pc, CorgiChar* end, Node** node)
+{
+    Node* n = NULL;
+    CorgiStatus status = parse_branch(compiler, pc, end, &n);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    if (**pc != ')') {
+        return ERR_PARENTHESIS_NOT_CLOSED;
+    }
+    (*pc)++;
+    status = create_node(compiler, NODE_SUBPATTERN, node);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    (*node)->u.subpattern.group_id = compiler->group_id;
+    compiler->group_id++;
+    (*node)->u.subpattern.node = n;
+    return CORGI_OK;
 }
 
 static CorgiStatus
-parse_single_pattern(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
+parse_single_pattern(Compiler* compiler, CorgiChar** pc, CorgiChar* end, Node** node)
 {
     if (**pc == '[') {
         (*pc)++;
-        return parse_in(storage, pc, end, node);
+        return parse_in(compiler, pc, end, node);
     }
     if (**pc == '\\') {
         (*pc)++;
-        return parse_escape(storage, pc, end, node);
+        return parse_escape(compiler, pc, end, node);
     }
     if ((**pc == '^') || (**pc == '$')) {
         CorgiCode type = **pc == '^' ? SRE_AT_BEGINNING_LINE : SRE_AT_END_LINE;
         (*pc)++;
-        return create_at_node(storage, type, node);
+        return create_at_node(compiler, type, node);
+    }
+    if (**pc == '(') {
+        (*pc)++;
+        return parse_group(compiler, pc, end, node);
     }
 
-    CorgiStatus status = create_literal_node(storage, **pc, node);
+    CorgiStatus status = create_literal_node(compiler, **pc, node);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2227,7 +2296,7 @@ parse_single_pattern(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** n
 }
 
 static CorgiStatus
-create_repeat_node(Storage** storage, CorgiChar** pc, CorgiChar* end, CorgiUInt min, CorgiUInt max, Node* body, Node** node)
+create_repeat_node(Compiler* compiler, CorgiChar** pc, CorgiChar* end, CorgiUInt min, CorgiUInt max, Node* body, Node** node)
 {
     NodeType type;
     if ((*pc < end) && (**pc == '?')) {
@@ -2237,7 +2306,7 @@ create_repeat_node(Storage** storage, CorgiChar** pc, CorgiChar* end, CorgiUInt 
     else {
         type = NODE_MAX_REPEAT;
     }
-    CorgiStatus status = create_node(storage, type, node);
+    CorgiStatus status = create_node(compiler, type, node);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2268,7 +2337,7 @@ parse_number(CorgiChar** pc, CorgiChar* end, CorgiUInt default_)
 }
 
 static CorgiStatus
-parse_min_max_repeat(Storage** storage, CorgiChar** pc, CorgiChar* end, Node* body, Node** node)
+parse_min_max_repeat(Compiler* compiler, CorgiChar** pc, CorgiChar* end, Node* body, Node** node)
 {
     CorgiChar c = **pc;
     assert(c == '{');
@@ -2286,17 +2355,17 @@ parse_min_max_repeat(Storage** storage, CorgiChar** pc, CorgiChar* end, Node* bo
     }
     if ((end <= *pc) || (**pc != '}')) {
         *pc = rollback;
-        return create_literal_node(storage, c, node);
+        return create_literal_node(compiler, c, node);
     }
     (*pc)++;
-    return create_repeat_node(storage, pc, end, min, max, body, node);
+    return create_repeat_node(compiler, pc, end, min, max, body, node);
 }
 
 static CorgiStatus
-parse_repeat(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
+parse_repeat(Compiler* compiler, CorgiChar** pc, CorgiChar* end, Node** node)
 {
     Node* n = NULL;
-    CorgiStatus status = parse_single_pattern(storage, pc, end, &n);
+    CorgiStatus status = parse_single_pattern(compiler, pc, end, &n);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2306,24 +2375,24 @@ parse_repeat(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
     }
     if (**pc == '?') {
         (*pc)++;
-        return create_repeat_node(storage, pc, end, 0, 1, n, node);
+        return create_repeat_node(compiler, pc, end, 0, 1, n, node);
     }
     if ((**pc == '*') || (**pc == '+')) {
         CorgiUInt min = **pc == '*' ? 0 : 1;
         (*pc)++;
-        return create_repeat_node(storage, pc, end, min, 65535, n, node);
+        return create_repeat_node(compiler, pc, end, min, 65535, n, node);
     }
     if (**pc == '{') {
-        return parse_min_max_repeat(storage, pc, end, n, node);
+        return parse_min_max_repeat(compiler, pc, end, n, node);
     }
     *node = n;
     return CORGI_OK;
 }
 
 static CorgiStatus
-parse_sub_pattern(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
+parse_subpattern(Compiler* compiler, CorgiChar** pc, CorgiChar* end, Node** node)
 {
-    CorgiStatus status = parse_repeat(storage, pc, end, node);
+    CorgiStatus status = parse_repeat(compiler, pc, end, node);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2331,7 +2400,7 @@ parse_sub_pattern(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node
     Node* prev = *node;
     while ((*pc < end) && (**pc != '|') && (**pc != ')') && (status == CORGI_OK)) {
         Node* node = NULL;
-        status = parse_repeat(storage, pc, end, &node);
+        status = parse_repeat(compiler, pc, end, &node);
         prev->next = node;
         prev = node;
     }
@@ -2340,16 +2409,16 @@ parse_sub_pattern(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node
 }
 
 static CorgiStatus
-parse_branch(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
+parse_branch(Compiler* compiler, CorgiChar** pc, CorgiChar* end, Node** node)
 {
-    CorgiStatus status = create_node(storage, NODE_BRANCH, node);
+    CorgiStatus status = create_node(compiler, NODE_BRANCH, node);
     if (status != CORGI_OK) {
         return status;
     }
     (*node)->u.branch.left = (*node)->u.branch.right = NULL;
 
     Node* left = NULL;
-    status = parse_sub_pattern(storage, pc, end, &left);
+    status = parse_subpattern(compiler, pc, end, &left);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2362,7 +2431,7 @@ parse_branch(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
     (*pc)++;
 
     Node* right = NULL;
-    status = parse_sub_pattern(storage, pc, end, &right);
+    status = parse_subpattern(compiler, pc, end, &right);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2380,6 +2449,7 @@ enum InstructionType {
     INST_JUMP,
     INST_LABEL,
     INST_LITERAL,
+    INST_MARK,
     INST_MAX_UNTIL,
     INST_MIN_UNTIL,
     INST_NEGATE,
@@ -2411,6 +2481,9 @@ struct Instruction {
             CorgiChar c;
         } literal;
         struct {
+            CorgiUInt id;
+        } mark;
+        struct {
             struct Instruction* dest;
         } offset;
         struct {
@@ -2429,9 +2502,9 @@ struct Instruction {
 typedef struct Instruction Instruction;
 
 static CorgiStatus
-create_instruction(Storage** storage, InstructionType type, Instruction** inst)
+create_instruction(Compiler* compiler, InstructionType type, Instruction** inst)
 {
-    *inst = alloc_from_storage(storage, sizeof(**inst));
+    *inst = alloc(compiler, sizeof(**inst));
     if (*inst == NULL) {
         return ERR_OUT_OF_MEMORY;
     }
@@ -2441,9 +2514,9 @@ create_instruction(Storage** storage, InstructionType type, Instruction** inst)
 }
 
 static CorgiStatus
-create_label(Storage** storage, Instruction** inst)
+create_label(Compiler* compiler, Instruction** inst)
 {
-    return create_instruction(storage, INST_LABEL, inst);
+    return create_instruction(compiler, INST_LABEL, inst);
 }
 
 static Instruction*
@@ -2459,24 +2532,24 @@ get_last_instruction(Instruction* inst)
     return i;
 }
 
-static CorgiStatus node2instruction(Storage**, Node*, Instruction**);
+static CorgiStatus node2instruction(Compiler*, Node*, Instruction**);
 
 static CorgiStatus
-branch_child2instruction(Storage** storage, Node* node, Instruction* branch_last, Instruction** inst)
+branch_child2instruction(Compiler* compiler, Node* node, Instruction* branch_last, Instruction** inst)
 {
-    CorgiStatus status = create_instruction(storage, INST_OFFSET, inst);
+    CorgiStatus status = create_instruction(compiler, INST_OFFSET, inst);
     if (status != CORGI_OK) {
         return status;
     }
     Instruction* last = NULL;
-    status = create_label(storage, &last);
+    status = create_label(compiler, &last);
     if (status != CORGI_OK) {
         return status;
     }
     (*inst)->u.offset.dest = last;
 
     Instruction* i = NULL;
-    status = node2instruction(storage, node, &i);
+    status = node2instruction(compiler, node, &i);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2484,7 +2557,7 @@ branch_child2instruction(Storage** storage, Node* node, Instruction* branch_last
     Instruction* rear = get_last_instruction(i);
 
     Instruction* jump = NULL;
-    status = create_instruction(storage, INST_JUMP, &jump);
+    status = create_instruction(compiler, INST_JUMP, &jump);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2496,19 +2569,19 @@ branch_child2instruction(Storage** storage, Node* node, Instruction* branch_last
 }
 
 static CorgiStatus
-branch_children2instruction(Storage** storage, Node* node, Instruction* branch_last, Instruction** inst)
+branch_children2instruction(Compiler* compiler, Node* node, Instruction* branch_last, Instruction** inst)
 {
     assert(node->type == NODE_BRANCH);
-    CorgiStatus status = branch_child2instruction(storage, node->u.branch.left, branch_last, inst);
+    CorgiStatus status = branch_child2instruction(compiler, node->u.branch.left, branch_last, inst);
     if (status != CORGI_OK) {
         return status;
     }
     Instruction* i = NULL;
     if (node->u.branch.right->type != NODE_BRANCH) {
-        status = branch_child2instruction(storage, node->u.branch.right, branch_last, &i);
+        status = branch_child2instruction(compiler, node->u.branch.right, branch_last, &i);
     }
     else {
-        status = branch_children2instruction(storage, node->u.branch.right, branch_last, &i);
+        status = branch_children2instruction(compiler, node->u.branch.right, branch_last, &i);
     }
     if (status != CORGI_OK) {
         return status;
@@ -2517,17 +2590,17 @@ branch_children2instruction(Storage** storage, Node* node, Instruction* branch_l
     return CORGI_OK;
 }
 
-static CorgiStatus single_node2instruction(Storage**, Node*, Instruction**);
+static CorgiStatus single_node2instruction(Compiler*, Node*, Instruction**);
 
 static CorgiStatus
-in2instruction(Storage** storage, Node* node, Instruction** inst)
+in2instruction(Compiler* compiler, Node* node, Instruction** inst)
 {
-    CorgiStatus status = create_instruction(storage, INST_IN, inst);
+    CorgiStatus status = create_instruction(compiler, INST_IN, inst);
     if (status != CORGI_OK) {
         return status;
     }
     Instruction* dest = NULL;
-    status = create_label(storage, &dest);
+    status = create_label(compiler, &dest);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2536,12 +2609,12 @@ in2instruction(Storage** storage, Node* node, Instruction** inst)
     Node* n;
     for (n = node->u.in.set; (n != NULL) && (status == CORGI_OK); n = n->next) {
         Instruction* i = NULL;
-        status = single_node2instruction(storage, n, &i);
+        status = single_node2instruction(compiler, n, &i);
         last->next = i;
         last = get_last_instruction(i);
     }
     Instruction* failure = NULL;
-    status = create_instruction(storage, INST_FAILURE, &failure);
+    status = create_instruction(compiler, INST_FAILURE, &failure);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2551,9 +2624,9 @@ in2instruction(Storage** storage, Node* node, Instruction** inst)
 }
 
 static CorgiStatus
-at2instruction(Storage** storage, Node* node, Instruction** inst)
+at2instruction(Compiler* compiler, Node* node, Instruction** inst)
 {
-    CorgiStatus status = create_instruction(storage, INST_AT, inst);
+    CorgiStatus status = create_instruction(compiler, INST_AT, inst);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2562,26 +2635,26 @@ at2instruction(Storage** storage, Node* node, Instruction** inst)
 }
 
 static CorgiStatus
-branch2instruction(Storage** storage, Node* node, Instruction** inst)
+branch2instruction(Compiler* compiler, Node* node, Instruction** inst)
 {
     assert(node->type == NODE_BRANCH);
-    CorgiStatus status = create_instruction(storage, INST_BRANCH, inst);
+    CorgiStatus status = create_instruction(compiler, INST_BRANCH, inst);
     if (status != CORGI_OK) {
         return status;
     }
     Instruction* label = NULL;
-    status = create_label(storage, &label);
+    status = create_label(compiler, &label);
     if (status != CORGI_OK) {
         return status;
     }
     Instruction* internal = NULL;
-    status = branch_children2instruction(storage, node, label, &internal);
+    status = branch_children2instruction(compiler, node, label, &internal);
     if (status != CORGI_OK) {
         return status;
     }
     (*inst)->next = internal;
     Instruction* failure = NULL;
-    status = create_instruction(storage, INST_FAILURE, &failure);
+    status = create_instruction(compiler, INST_FAILURE, &failure);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2592,9 +2665,9 @@ branch2instruction(Storage** storage, Node* node, Instruction** inst)
 }
 
 static CorgiStatus
-literal2instruction(Storage** storage, Node* node, Instruction** inst)
+literal2instruction(Compiler* compiler, Node* node, Instruction** inst)
 {
-    CorgiStatus status = create_instruction(storage, INST_LITERAL, inst);
+    CorgiStatus status = create_instruction(compiler, INST_LITERAL, inst);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2603,9 +2676,33 @@ literal2instruction(Storage** storage, Node* node, Instruction** inst)
 }
 
 static CorgiStatus
-range2instruction(Storage** storage, Node* node, Instruction** inst)
+subpattern2instruction(Compiler* compiler, Node* node, Instruction** inst)
 {
-    CorgiStatus status = create_instruction(storage, INST_RANGE, inst);
+    CorgiStatus status = create_instruction(compiler, INST_MARK, inst);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    (*inst)->u.mark.id = 2 * node->u.subpattern.group_id;
+    Instruction* i = NULL;
+    status = node2instruction(compiler, node->u.subpattern.node, &i);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    (*inst)->next = i;
+    Instruction* mark = NULL;
+    status = create_instruction(compiler, INST_MARK, &mark);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    mark->u.mark.id = 2 * node->u.subpattern.group_id + 1;
+    get_last_instruction(i)->next = mark;
+    return CORGI_OK;
+}
+
+static CorgiStatus
+range2instruction(Compiler* compiler, Node* node, Instruction** inst)
+{
+    CorgiStatus status = create_instruction(compiler, INST_RANGE, inst);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2615,29 +2712,29 @@ range2instruction(Storage** storage, Node* node, Instruction** inst)
 }
 
 static CorgiStatus
-repeat2instruction(Storage** storage, Node* node, InstructionType until_type, Instruction** inst)
+repeat2instruction(Compiler* compiler, Node* node, InstructionType until_type, Instruction** inst)
 {
-    CorgiStatus status = create_instruction(storage, INST_REPEAT, inst);
+    CorgiStatus status = create_instruction(compiler, INST_REPEAT, inst);
     if (status != CORGI_OK) {
         return status;
     }
     (*inst)->u.repeat.min = node->u.repeat.min;
     (*inst)->u.repeat.max = node->u.repeat.max;
     Instruction* dest = NULL;
-    status = create_label(storage, &dest);
+    status = create_label(compiler, &dest);
     if (status != CORGI_OK) {
         return status;
     }
     (*inst)->u.repeat.dest = dest;
     Instruction* i = NULL;
-    status = single_node2instruction(storage, node->u.repeat.body, &i);
+    status = single_node2instruction(compiler, node->u.repeat.body, &i);
     if (status != CORGI_OK) {
         return status;
     }
     (*inst)->next = i;
     get_last_instruction(i)->next = dest;
     Instruction* until = NULL;
-    status = create_instruction(storage, until_type, &until);
+    status = create_instruction(compiler, until_type, &until);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2646,21 +2743,21 @@ repeat2instruction(Storage** storage, Node* node, InstructionType until_type, In
 }
 
 static CorgiStatus
-min_repeat2instruction(Storage** storage, Node* node, Instruction** inst)
+min_repeat2instruction(Compiler* compiler, Node* node, Instruction** inst)
 {
-    return repeat2instruction(storage, node, INST_MIN_UNTIL, inst);
+    return repeat2instruction(compiler, node, INST_MIN_UNTIL, inst);
 }
 
 static CorgiStatus
-max_repeat2instruction(Storage** storage, Node* node, Instruction** inst)
+max_repeat2instruction(Compiler* compiler, Node* node, Instruction** inst)
 {
-    return repeat2instruction(storage, node, INST_MAX_UNTIL, inst);
+    return repeat2instruction(compiler, node, INST_MAX_UNTIL, inst);
 }
 
 static CorgiStatus
-category2instruction(Storage** storage, Node* node, Instruction** inst)
+category2instruction(Compiler* compiler, Node* node, Instruction** inst)
 {
-    CorgiStatus status = create_instruction(storage, INST_CATEGORY, inst);
+    CorgiStatus status = create_instruction(compiler, INST_CATEGORY, inst);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2669,9 +2766,9 @@ category2instruction(Storage** storage, Node* node, Instruction** inst)
 }
 
 static CorgiStatus
-single_node2instruction(Storage** storage, Node* node, Instruction** inst)
+single_node2instruction(Compiler* compiler, Node* node, Instruction** inst)
 {
-    CorgiStatus (*f)(Storage**, Node*, Instruction**);
+    CorgiStatus (*f)(Compiler*, Node*, Instruction**);
     switch (node->type) {
     case NODE_AT:
         f = at2instruction;
@@ -2695,20 +2792,23 @@ single_node2instruction(Storage** storage, Node* node, Instruction** inst)
         f = min_repeat2instruction;
         break;
     case NODE_NEGATE:
-        return create_instruction(storage, INST_NEGATE, inst);
+        return create_instruction(compiler, INST_NEGATE, inst);
     case NODE_RANGE:
         f = range2instruction;
+        break;
+    case NODE_SUBPATTERN:
+        f = subpattern2instruction;
         break;
     default:
         return ERR_INVALID_NODE;
     }
-    return f(storage, node, inst);
+    return f(compiler, node, inst);
 }
 
 static CorgiStatus
-node2instruction(Storage** storage, Node* node, Instruction** inst)
+node2instruction(Compiler* compiler, Node* node, Instruction** inst)
 {
-    CorgiStatus status = single_node2instruction(storage, node, inst);
+    CorgiStatus status = single_node2instruction(compiler, node, inst);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2717,7 +2817,7 @@ node2instruction(Storage** storage, Node* node, Instruction** inst)
     Node* n = node->next;
     while ((n != NULL) && (status == CORGI_OK)) {
         Instruction* i = NULL;
-        status = single_node2instruction(storage, n, &i);
+        status = single_node2instruction(compiler, n, &i);
         rear->next = i;
 
         rear = get_last_instruction(i);
@@ -2743,6 +2843,8 @@ get_operands_number(Instruction* inst)
     case INST_JUMP:
         return 1;
     case INST_LITERAL:
+        return 1;
+    case INST_MARK:
         return 1;
     case INST_MAX_UNTIL:
         return 0;
@@ -2831,6 +2933,12 @@ write_code(CorgiCode** code, Instruction* inst)
         **code = inst->u.literal.c;
         (*code)++;
         break;
+    case INST_MARK:
+        **code = SRE_OP_MARK;
+        (*code)++;
+        **code = inst->u.mark.id;
+        (*code)++;
+        break;
     case INST_MAX_UNTIL:
         **code = SRE_OP_MAX_UNTIL;
         (*code)++;
@@ -2898,20 +3006,20 @@ instruction2code(Instruction* inst, CorgiCode** code, CorgiUInt* code_size)
 }
 
 static CorgiStatus
-parse_to_instruction(Storage** storage, CorgiChar* begin, CorgiChar* end, Instruction** inst)
+parse_to_instruction(Compiler* compiler, CorgiChar* begin, CorgiChar* end, Instruction** inst)
 {
     Node* node = NULL; /* gcc dislike uninitialized */
     CorgiChar* pc = begin;
-    CorgiStatus status = parse_branch(storage, &pc, end, &node);
+    CorgiStatus status = parse_branch(compiler, &pc, end, &node);
     if (status != CORGI_OK) {
         return status;
     }
-    status = node2instruction(storage, node, inst);
+    status = node2instruction(compiler, node, inst);
     if (status != CORGI_OK) {
         return status;
     }
     Instruction* success = NULL;
-    status = create_instruction(storage, INST_SUCCESS, &success);
+    status = create_instruction(compiler, INST_SUCCESS, &success);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2920,42 +3028,77 @@ parse_to_instruction(Storage** storage, CorgiChar* begin, CorgiChar* end, Instru
 }
 
 static CorgiStatus
-compile_with_storage(Storage** storage, CorgiChar* begin, CorgiChar* end, CorgiCode** code, CorgiUInt* code_size)
+compile_with_compiler(Compiler* compiler, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end)
 {
     Instruction* inst = NULL;
-    CorgiStatus status = parse_to_instruction(storage, begin, end, &inst);
+    CorgiStatus status = parse_to_instruction(compiler, begin, end, &inst);
     if (status != CORGI_OK) {
         return status;
     }
-    return instruction2code(inst, code, code_size);
-}
-
-CorgiStatus
-corgi_compile(CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end)
-{
-    Storage* storage = alloc_storage(NULL);
     CorgiCode* code = NULL;
     CorgiUInt code_size = 0;
-    CorgiStatus status = compile_with_storage(&storage, begin, end, &code, &code_size);
-    free_storage(storage);
+    status = instruction2code(inst, &code, &code_size);
     if (status != CORGI_OK) {
         return status;
     }
     regexp->code = code;
     regexp->code_size = code_size;
+    regexp->groups_num = compiler->group_id + 1;
     return CORGI_OK;
+}
+
+CorgiStatus
+corgi_compile(CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end)
+{
+    Compiler compiler;
+    CorgiStatus status = init_compiler(&compiler);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    status = compile_with_compiler(&compiler, regexp, begin, end);
+    fini_compiler(&compiler);
+    return status;
+}
+
+typedef CorgiInt (*Proc)(State*, CorgiCode*);
+
+static CorgiStatus
+do_with_state(State* state, CorgiMatch* match, CorgiRegexp* regexp, Proc proc)
+{
+    CorgiInt ret = proc(state, regexp->code);
+    if (ret == 0) {
+        /* TODO */
+        return 42;
+    }
+    CorgiGroup* groups = malloc(sizeof(CorgiGroup) * regexp->groups_num);
+    if (groups == NULL) {
+        return ERR_OUT_OF_MEMORY;
+    }
+    groups[0].begin = state->start - state->beginning;
+    groups[0].end = state->ptr - state->beginning;
+    CorgiUInt i;
+    for (i = 1; i < regexp->groups_num; i++) {
+        groups[i].begin = state->mark[2 * (i - 1)] - state->beginning;
+        groups[i].end = state->mark[2 * (i - 1) + 1] - state->beginning;
+    }
+    match->groups = groups;
+    return CORGI_OK;
+}
+
+static CorgiStatus
+corgi_main(CorgiMatch* match, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end, CorgiChar* at, CorgiOptions opts, Proc proc)
+{
+    State state;
+    state_init(&state, regexp, begin, end, at, opts & CORGI_OPT_DEBUG);
+    CorgiStatus status = do_with_state(&state, match, regexp, proc);
+    state_fini(&state);
+    return status;
 }
 
 CorgiStatus
 corgi_match(CorgiMatch* match, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end, CorgiChar* at, CorgiOptions opts)
 {
-    State state;
-    state_init(&state, regexp, begin, end, at, opts & CORGI_OPT_DEBUG);
-    CorgiInt ret = sre_match(&state, regexp->code);
-    match->begin = state.start - state.beginning;
-    match->end = state.ptr - state.beginning;
-    state_fini(&state);
-    return ret != 0 ? CORGI_OK : 42;
+    return corgi_main(match, regexp, begin, end, at, opts, sre_match);
 }
 
 static const char*
@@ -3068,6 +3211,9 @@ dump_instruction(Instruction* inst)
         c = inst->u.literal.c;
         printf("LITERAL %8u (%c)", c, char2printable(c));
         break;
+    case INST_MARK:
+        printf("MARK %u", inst->u.mark.id);
+        break;
     case INST_MAX_UNTIL:
         printf("MAX_UNTIL");
         break;
@@ -3099,10 +3245,10 @@ dump_instruction(Instruction* inst)
 }
 
 static CorgiStatus
-dump_with_storage(Storage** storage, CorgiChar* begin, CorgiChar* end)
+dump_with_compiler(Compiler* compiler, CorgiChar* begin, CorgiChar* end)
 {
     Instruction* inst = NULL;
-    CorgiStatus status = parse_to_instruction(storage, begin, end, &inst);
+    CorgiStatus status = parse_to_instruction(compiler, begin, end, &inst);
     if (status != CORGI_OK) {
         return status;
     }
@@ -3117,17 +3263,18 @@ dump_with_storage(Storage** storage, CorgiChar* begin, CorgiChar* end)
 CorgiStatus
 corgi_dump(CorgiChar* begin, CorgiChar* end)
 {
-    Storage* storage = alloc_storage(NULL);
-    CorgiStatus status = dump_with_storage(&storage, begin, end);
-    free_storage(storage);
+    Compiler compiler;
+    init_compiler(&compiler);
+    CorgiStatus status = dump_with_compiler(&compiler, begin, end);
+    fini_compiler(&compiler);
     return status;
 }
 
 static void
-disassemble_operand(int pos, CorgiCode operand)
+disassemble_opcode(int pos, CorgiCode opcode)
 {
     const char* name;
-    switch (operand) {
+    switch (opcode) {
     case SRE_OP_FAILURE:
         name = "FAILURE";
         break;
@@ -3257,7 +3404,7 @@ static void
 disassemble_code(CorgiCode** p, CorgiCode* base)
 {
     CorgiCode operand = **p;
-    disassemble_operand(*p - base, operand);
+    disassemble_opcode(*p - base, operand);
     (*p)++;
 
     CorgiCode offset;
@@ -3396,13 +3543,7 @@ corgi_disassemble(CorgiRegexp* regexp)
 CorgiStatus
 corgi_search(CorgiMatch* match, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end, CorgiChar* at, CorgiOptions opts)
 {
-    State state;
-    state_init(&state, regexp, begin, end, at, opts & CORGI_OPT_DEBUG);
-    CorgiInt ret = sre_search(&state, regexp->code);
-    match->begin = state.start - state.beginning;
-    match->end = state.ptr - state.beginning;
-    state_fini(&state);
-    return ret != 0 ? CORGI_OK : 42;
+    return corgi_main(match, regexp, begin, end, at, opts, sre_search);
 }
 
 /**

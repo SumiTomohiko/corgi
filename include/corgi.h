@@ -34,13 +34,20 @@ typedef CorgiChar CorgiCode;
 struct CorgiRegexp {
     CorgiCode* code;
     CorgiUInt code_size;
+    CorgiUInt groups_num;
 };
 
 typedef struct CorgiRegexp CorgiRegexp;
 
-struct CorgiMatch {
+struct CorgiGroup {
     CorgiUInt begin;
     CorgiUInt end;
+};
+
+typedef struct CorgiGroup CorgiGroup;
+
+struct CorgiMatch {
+    CorgiGroup* groups;
 };
 
 typedef struct CorgiMatch CorgiMatch;
