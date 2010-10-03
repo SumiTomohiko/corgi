@@ -2166,6 +2166,9 @@ parse_escape(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
     case 'W':
         type = SRE_CATEGORY_UNI_NOT_WORD;
         break;
+    case 'd':
+        type = SRE_CATEGORY_UNI_DIGIT;
+        break;
     case 's':
         type = SRE_CATEGORY_UNI_SPACE;
         break;
