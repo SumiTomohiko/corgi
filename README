@@ -36,21 +36,6 @@ Syntax Elements
 [...]  character class
 ===== ===============
 
-Characters
-~~~~~~~~~~
-
-========= =================================
-\\t       horizontal tab (0x09)
-\\v       vertical tab (0x0b)
-\\n       newline (0x0a)
-\\r       return (0x0d)
-\\b       backspace (0x08)
-\\f       form feed (0x0c)
-\\a       bell (0x07)
-\\e       escape (0x1b)
-\\x7HHHHH hexadecimal character (codepoint)
-========= =================================
-
 Character Types
 ~~~~~~~~~~~~~~~
 
@@ -99,8 +84,6 @@ $   end of the line
 \\B not word boundary
 \\A beginning of string
 \\Z end of string, or before newline at the end
-\\z end of string
-\\G matching start position
 === ============================================
 
 Character class
