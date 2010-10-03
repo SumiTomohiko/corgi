@@ -1989,6 +1989,7 @@ enum NodeType {
     NODE_IN,
     NODE_LITERAL,
     NODE_MAX_REPEAT,
+    NODE_MIN_REPEAT,
     NODE_NEGATE,
     NODE_RANGE,
 };
@@ -2015,7 +2016,7 @@ struct Node {
             CorgiUInt min;
             CorgiUInt max;
             struct Node* body;
-        } max_repeat;
+        } repeat;
         struct {
             CorgiChar low;
             CorgiChar high;
@@ -2205,15 +2206,23 @@ parse_single_pattern(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** n
 }
 
 static CorgiStatus
-make_repeat(Storage** storage, CorgiChar** pc, CorgiChar* end, CorgiUInt min, CorgiUInt max, Node* body, Node** node)
+create_repeat_node(Storage** storage, CorgiChar** pc, CorgiChar* end, CorgiUInt min, CorgiUInt max, Node* body, Node** node)
 {
-    CorgiStatus status = create_node(storage, NODE_MAX_REPEAT, node);
+    NodeType type;
+    if ((*pc < end) && (**pc == '?')) {
+        (*pc)++;
+        type = NODE_MIN_REPEAT;
+    }
+    else {
+        type = NODE_MAX_REPEAT;
+    }
+    CorgiStatus status = create_node(storage, type, node);
     if (status != CORGI_OK) {
         return status;
     }
-    (*node)->u.max_repeat.min = min;
-    (*node)->u.max_repeat.max = max;
-    (*node)->u.max_repeat.body = body;
+    (*node)->u.repeat.min = min;
+    (*node)->u.repeat.max = max;
+    (*node)->u.repeat.body = body;
     return CORGI_OK;
 }
 
@@ -2259,7 +2268,7 @@ parse_min_max_repeat(Storage** storage, CorgiChar** pc, CorgiChar* end, Node* bo
         return create_literal_node(storage, c, node);
     }
     (*pc)++;
-    return make_repeat(storage, pc, end, min, max, body, node);
+    return create_repeat_node(storage, pc, end, min, max, body, node);
 }
 
 static CorgiStatus
@@ -2277,7 +2286,7 @@ parse_repeat(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
     if ((**pc == '*') || (**pc == '+')) {
         CorgiUInt min = **pc == '*' ? 0 : 1;
         (*pc)++;
-        return make_repeat(storage, pc, end, min, 65535, n, node);
+        return create_repeat_node(storage, pc, end, min, 65535, n, node);
     }
     if (**pc == '{') {
         return parse_min_max_repeat(storage, pc, end, n, node);
@@ -2346,6 +2355,7 @@ enum InstructionType {
     INST_LABEL,
     INST_LITERAL,
     INST_MAX_UNTIL,
+    INST_MIN_UNTIL,
     INST_NEGATE,
     INST_OFFSET,
     INST_RANGE,
@@ -2565,14 +2575,14 @@ range2instruction(Storage** storage, Node* node, Instruction** inst)
 }
 
 static CorgiStatus
-max_repeat2instruction(Storage** storage, Node* node, Instruction** inst)
+repeat2instruction(Storage** storage, Node* node, InstructionType until_type, Instruction** inst)
 {
     CorgiStatus status = create_instruction(storage, INST_REPEAT, inst);
     if (status != CORGI_OK) {
         return status;
     }
-    (*inst)->u.repeat.min = node->u.max_repeat.min;
-    (*inst)->u.repeat.max = node->u.max_repeat.max;
+    (*inst)->u.repeat.min = node->u.repeat.min;
+    (*inst)->u.repeat.max = node->u.repeat.max;
     Instruction* dest = NULL;
     status = create_label(storage, &dest);
     if (status != CORGI_OK) {
@@ -2580,19 +2590,31 @@ max_repeat2instruction(Storage** storage, Node* node, Instruction** inst)
     }
     (*inst)->u.repeat.dest = dest;
     Instruction* i = NULL;
-    status = single_node2instruction(storage, node->u.max_repeat.body, &i);
+    status = single_node2instruction(storage, node->u.repeat.body, &i);
     if (status != CORGI_OK) {
         return status;
     }
     (*inst)->next = i;
     get_last_instruction(i)->next = dest;
-    Instruction* max_until = NULL;
-    status = create_instruction(storage, INST_MAX_UNTIL, &max_until);
+    Instruction* until = NULL;
+    status = create_instruction(storage, until_type, &until);
     if (status != CORGI_OK) {
         return status;
     }
-    dest->next = max_until;
+    dest->next = until;
     return CORGI_OK;
+}
+
+static CorgiStatus
+min_repeat2instruction(Storage** storage, Node* node, Instruction** inst)
+{
+    return repeat2instruction(storage, node, INST_MIN_UNTIL, inst);
+}
+
+static CorgiStatus
+max_repeat2instruction(Storage** storage, Node* node, Instruction** inst)
+{
+    return repeat2instruction(storage, node, INST_MAX_UNTIL, inst);
 }
 
 static CorgiStatus
@@ -2625,6 +2647,9 @@ single_node2instruction(Storage** storage, Node* node, Instruction** inst)
         break;
     case NODE_MAX_REPEAT:
         f = max_repeat2instruction;
+        break;
+    case NODE_MIN_REPEAT:
+        f = min_repeat2instruction;
         break;
     case NODE_NEGATE:
         return create_instruction(storage, INST_NEGATE, inst);
@@ -2675,6 +2700,8 @@ get_operands_number(Instruction* inst)
     case INST_LITERAL:
         return 1;
     case INST_MAX_UNTIL:
+        return 0;
+    case INST_MIN_UNTIL:
         return 0;
     case INST_NEGATE:
         return 0;
@@ -2755,6 +2782,10 @@ write_code(CorgiCode** code, Instruction* inst)
         break;
     case INST_MAX_UNTIL:
         **code = SRE_OP_MAX_UNTIL;
+        (*code)++;
+        break;
+    case INST_MIN_UNTIL:
+        **code = SRE_OP_MIN_UNTIL;
         (*code)++;
         break;
     case INST_NEGATE:
@@ -2959,6 +2990,9 @@ dump_instruction(Instruction* inst)
         break;
     case INST_MAX_UNTIL:
         printf("MAX_UNTIL");
+        break;
+    case INST_MIN_UNTIL:
+        printf("MIN_UNTIL");
         break;
     case INST_NEGATE:
         printf("NEGATE");
