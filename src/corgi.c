@@ -2217,6 +2217,51 @@ make_repeat(Storage** storage, CorgiChar** pc, CorgiChar* end, CorgiUInt min, Co
     return CORGI_OK;
 }
 
+static Bool
+is_digit(CorgiChar* pc, CorgiChar* end)
+{
+    return (pc < end) && ('0' <= *pc) && (*pc <= '9') ? TRUE : FALSE;
+}
+
+static CorgiUInt
+parse_number(CorgiChar** pc, CorgiChar* end, CorgiUInt default_)
+{
+    if (!is_digit(*pc, end)) {
+        return default_;
+    }
+    CorgiUInt n = 0;
+    do {
+        n = 10 * n + ((**pc) - '0');
+        (*pc)++;
+    } while (is_digit(*pc, end));
+    return n;
+}
+
+static CorgiStatus
+parse_min_max_repeat(Storage** storage, CorgiChar** pc, CorgiChar* end, Node* body, Node** node)
+{
+    CorgiChar c = **pc;
+    assert(c == '{');
+    (*pc)++;
+    CorgiChar* rollback = *pc;
+
+    CorgiUInt min = parse_number(pc, end, 0);
+    CorgiUInt max;
+    if ((*pc < end) && (**pc == ',')) {
+        (*pc)++;
+        max = parse_number(pc, end, 65535);
+    }
+    else {
+        max = 65535;
+    }
+    if ((end <= *pc) || (**pc != '}')) {
+        *pc = rollback;
+        return create_literal_node(storage, c, node);
+    }
+    (*pc)++;
+    return make_repeat(storage, pc, end, min, max, body, node);
+}
+
 static CorgiStatus
 parse_repeat(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
 {
@@ -2233,6 +2278,9 @@ parse_repeat(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
         CorgiUInt min = **pc == '*' ? 0 : 1;
         (*pc)++;
         return make_repeat(storage, pc, end, min, 65535, n, node);
+    }
+    if (**pc == '{') {
+        return parse_min_max_repeat(storage, pc, end, n, node);
     }
     *node = n;
     return CORGI_OK;
