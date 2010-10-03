@@ -61,10 +61,6 @@ Character Types
 \\S no white space character
 \\d decimal number (GeneralCategory - DecimalNumber)
 \\D non decimal digit character
-\\h hexadecimal digit character [0-9a-fA-F]
-\\H non hexadecimal digit character
-\\b word boundary
-\\B not word boundary
 === ==================================================================
 
 Quantifier
