@@ -2229,9 +2229,10 @@ parse_repeat(Storage** storage, CorgiChar** pc, CorgiChar* end, Node** node)
         *node = n;
         return CORGI_OK;
     }
-    if (**pc == '*') {
+    if ((**pc == '*') || (**pc == '+')) {
+        CorgiUInt min = **pc == '*' ? 0 : 1;
         (*pc)++;
-        return make_repeat(storage, pc, end, 0, 65535, n, node);
+        return make_repeat(storage, pc, end, min, 65535, n, node);
     }
     *node = n;
     return CORGI_OK;
