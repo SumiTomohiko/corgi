@@ -5,7 +5,6 @@
 .deps
 .gdb_history
 .libs
-Makefile
 Makefile.in
 aclocal.m4
 autom4te.cache
@@ -17,6 +16,9 @@ config.sub
 configure
 core
 depcomp
+doc/doctrees
+doc/html
+doc/index.rst
 include/corgi/config.h
 include/corgi/config.h.in
 include/corgi/config.h.in~
@@ -27,5 +29,7 @@ libtool
 ltmain.sh
 m4
 missing
+src/Makefile
 src/corgi
+tests/Makefile
 tests/test-corgi
