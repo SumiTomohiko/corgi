@@ -32,6 +32,7 @@ usage()
     puts("");
     puts("OPTIONS:");
     puts("  --debug, -d: Enable debugging");
+    puts("  --group-id, -g: Group number to show");
     puts("  --help, -h: Show this message");
     puts("  --version, -v: Show version information and exit");
     puts("");
