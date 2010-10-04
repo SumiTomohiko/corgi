@@ -9,7 +9,7 @@ run()
   fi
 }
 
-run mkdir -p include/corgi m4
+run mkdir -p m4
 run autoreconf --install
 run automake --add-missing
 

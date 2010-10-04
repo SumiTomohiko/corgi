@@ -1,5 +1,7 @@
 #include "corgi/config.h"
-#include <alloca.h>
+#if defined(CORGI_HAVE_ALLOCA_H)
+#   include <alloca.h>
+#endif
 #include <ctype.h>
 #include <getopt.h>
 #include <stdio.h>

@@ -10,12 +10,14 @@ AC_CONFIG_MACRO_DIR([m4])
 
 # Checks for programs.
 AC_PROG_CC
+AM_PROG_CC_C_O
 AC_PROG_LIBTOOL
 CORGI_PATH_PYTHON([3.0])
 
 # Checks for libraries.
 
 # Checks for header files.
+AC_CHECK_HEADERS([alloca.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_CHECK_SIZEOF(int)

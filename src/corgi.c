@@ -443,11 +443,11 @@ sre_count(State* state, CorgiCode* pattern, CorgiInt maxcount)
                 break;
             }
         }
-        TRACE(("|%p|%p|COUNT %d\n", pattern, ptr, state->ptr - ptr));
+        TRACE(("|%p|%p|COUNT %td\n", pattern, ptr, state->ptr - ptr));
         return state->ptr - ptr;
     }
 
-    TRACE(("|%p|%p|COUNT %d\n", pattern, ptr, ptr - state->ptr));
+    TRACE(("|%p|%p|COUNT %td\n", pattern, ptr, ptr - state->ptr));
     return ptr - state->ptr;
 }
 
@@ -516,7 +516,7 @@ sre_count(State* state, CorgiCode* pattern, CorgiInt maxcount)
 
 #define DATA_STACK_ALLOC(state, type, ptr) do { \
     alloc_pos = state->data_stack_base; \
-    TRACE(("allocating %s in %d (%d)\n", #type, alloc_pos, sizeof(type))); \
+    TRACE(("allocating %s in %d (%zu)\n", #type, alloc_pos, sizeof(type))); \
     if (state->data_stack_size < alloc_pos + sizeof(type)) { \
         int j = data_stack_grow(state, sizeof(type)); \
         if (j < 0) { \
@@ -536,7 +536,7 @@ sre_count(State* state, CorgiCode* pattern, CorgiInt maxcount)
 } while (0)
 
 #define DATA_STACK_PUSH(state, data, size) do { \
-    TRACE(("copy data in %p to %d (%d)\n", data, state->data_stack_base, size)); \
+    TRACE(("copy data in %p to %zu (%zu)\n", data, state->data_stack_base, size)); \
     if (state->data_stack_size < state->data_stack_base + size) { \
         int j = data_stack_grow(state, size); \
         if (j < 0) { \
@@ -551,7 +551,7 @@ sre_count(State* state, CorgiCode* pattern, CorgiInt maxcount)
 } while (0)
 
 #define DATA_STACK_POP(state, data, size, discard) do { \
-    TRACE(("copy data to %p from %d (%d)\n", data, state->data_stack_base-size, size)); \
+    TRACE(("copy data to %p from %tu (%zu)\n", data, state->data_stack_base-size, size)); \
     memcpy(data, state->data_stack + state->data_stack_base - size, size); \
     if (discard) { \
         state->data_stack_base -= size; \
@@ -559,7 +559,7 @@ sre_count(State* state, CorgiCode* pattern, CorgiInt maxcount)
 } while (0)
 
 #define DATA_STACK_POP_DISCARD(state, size) do { \
-    TRACE(("discard data from %d (%d)\n", state->data_stack_base-size, size)); \
+    TRACE(("discard data from %tu (%zu)\n", state->data_stack_base-size, size)); \
     state->data_stack_base -= size; \
 } while(0)
 
@@ -655,7 +655,7 @@ entrance:
         /* optimization info block */
         /* <INFO> <1=skip> <2=flags> <3=min> ... */
         if (ctx->pattern[3] && (end - ctx->ptr < ctx->pattern[3])) {
-            TRACE(("reject (got %d chars, need %d)\n", end - ctx->ptr, ctx->pattern[3]));
+            TRACE(("reject (got %td chars, need %d)\n", end - ctx->ptr, ctx->pattern[3]));
             RETURN_FAILURE;
         }
         ctx->pattern += ctx->pattern[1] + 1;
@@ -3394,7 +3394,7 @@ disassemble_branch(CorgiCode** p, CorgiCode* base)
     while (**p != 0) {
         CorgiCode offset = **p;
         CorgiCode* end = *p + offset;
-        printf("%04u (offset) %u\n", *p - base, offset);
+        printf("%04tu (offset) %u\n", *p - base, offset);
         (*p)++;
         disassemble_pattern(p, base, end);
     }
