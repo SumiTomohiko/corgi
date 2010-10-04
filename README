@@ -7,7 +7,8 @@ Features
 --------
 
 * corgi accepts UTF-32 strings.
-* Based on Python's regular expression's engine.
+* Based on Python's regular expression's engine (it seems fast).
+* Open source
 
 Requirements
 ------------
@@ -23,6 +24,81 @@ OS
 - Ubuntu Linux 8.04
 - FreeBSD 8.1
 - OpenBSD 4.6
+
+Install
+-------
+
+::
+
+  $ ./configure && make
+
+You will get ``src/.libs/libcorgi.so.x.y.z``, ``src/.libs/libcorgi.a`` and
+``src/corgi``.
+
+``corgi`` Utility
+-----------------
+
+``corgi`` in ``src`` directory is a utility to try corgi. It can match a string
+with a regular expression to show a matched substring and disassemble VM codes
+of a regular expression.
+
+``corgi``'s usage is::
+
+  corgi [OPTIONS]... SUBCOMMAND [PARAMETERS]...
+
+``SUBCOMMAND`` is one of the followings.
+
+* ``match``
+* ``search``
+* ``disassemble``
+
+``match`` Subcommand
+~~~~~~~~~~~~~~~~~~~~
+
+``match`` subcommand trys to match a string with a regular expression. When a
+string is matched with a regular expression, ``corgi`` shows a matched part of
+the string. ``match`` subcommand's usage is::
+
+  corgi [OPTIONS]... match <string> <regexp>
+
+``OPTIONS`` are
+
+* ``--group-id``: group number to show
+
+For example::
+
+  $ src/corgi --group-id 1 '<title>(.*)</title>' '<title>Hello, corgi</title>'
+
+will show you::
+
+  Hello, corgi
+
+``search`` Subcommand
+~~~~~~~~~~~~~~~~~~~~~
+
+``search`` subcommand searches a substring of a string which matches with a
+regular expression. ``search`` subcommand differs from ``match`` subcommand. In
+``match`` subcommand, a string must match with a regular expression at the
+beginning of the string. But in ``search`` subcommand, a string can match at
+anywhere.
+
+``search`` subcommand's usage is the same as that of ``match`` subcommand.
+
+``disassemble`` Subcommand
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``disassemble`` subcommand shows you VM codes of a given regular expression. For
+example,::
+
+  $ src/corgi disassemble "foo"
+  0000 LITERAL      102 (f)
+  0002 LITERAL      111 (o)
+  0004 LITERAL      111 (o)
+  0006 SUCCESS
+
+``disassemble`` subcommand's usage is::
+
+  corgi diassemble <regexp>
 
 Syntax
 ------
@@ -51,8 +127,9 @@ Character Types
 Quantifier
 ~~~~~~~~~~
 
-====== ============================================
 greedy
+^^^^^^
+
 ====== ============================================
 ?      1 or 0 times
 \*     0 or more times
@@ -63,8 +140,9 @@ greedy
 {n}    n times
 ====== ============================================
 
-========= ================================================
 reluctant
+^^^^^^^^^
+
 ========= ================================================
 ??        1 or 0 times
 \*?       0 or more times
@@ -94,6 +172,109 @@ Character class
 x-y   range from x to y
 [...] set (character class in character class)
 ===== ===========================================
+
+API
+---
+
+Header File
+~~~~~~~~~~~
+
+You must include ``corgi.h`` in ``include`` directory::
+
+  #include <corgi.h>
+
+Data Types and Structures
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. c:type:: CorgiChar
+
+:c:type:`CorgiChar` represents one character of UTF-32.
+
+.. c:type:: CorgiStatus
+
+Type of corgi API's return values is :c:type:`CorgiStatus`.  When they work
+successfully, they return :c:data:`CORGI_OK`. You can convert
+:c:type:`CorgiStatus` values to its string representation by
+:c:func:`corgi_strerror`.
+
+.. c:type:: CorgiUInt
+
+This is an unsigned integer whose size is same as pointers.
+
+.. c:type:: CorgiRegexp
+
+:c:type:`CorgiRegexp` represents a regular expression. This must be initialized
+by :c:func:`corgi_init_regexp`, and must be cleaned up by
+:c:func:`corgi_fini_regexp`.
+
+.. c:type:: CorgiMatch
+
+:c:type:`CorgiMatch` is matching information. You must initialize this with
+:c:func:`corgi_init_match`, and clean up with
+:c:func:`corgi_fini_match`.
+
+.. c:member:: CorgiGroup* CorgiMatch::groups
+
+``CorgiMatch::groups`` is an array. Elements of this are :c:type:`CorgiGroup`.
+The first element of this is for entire matching.
+
+.. c:type:: CorgiGroup
+
+:c:type:`CorgiGroup` tells range of a matched part in the string.
+
+.. c:member:: CorgiUInt CorgiGroup::begin
+
+This is a beginning position of the matched string.
+
+.. c:member:: CorgiUInt CorgiGroup::end
+
+This is an end position of the matched string.
+
+.. c:type:: CorgiOptions
+
+Variables of this data type are to contain flags.
+
+Functions
+~~~~~~~~~
+
+.. c:function:: CorgiStatus corgi_compile(CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end)
+
+Compiles a regular expression and contains results to ``regexp``. ``begin`` is a
+pointer to beginning of the regular expression, and ``end`` is a pointer to end.
+
+.. c:function:: CorgiStatus corgi_disassemble(CorgiRegexp* regexp)
+
+Prints VM codes of a regular expression to standard output.
+
+.. c:function:: CorgiStatus corgi_fini_match(CorgiMatch* match)
+
+Cleans up data in ``match``.
+
+.. c:function:: CorgiStatus corgi_fini_regexp(CorgiRegexp* regexp)
+
+Cleans up data in ``regexp``.
+
+.. c:function:: CorgiStatus corgi_init_match(CorgiMatch* match)
+
+Sets up ``match``.
+
+.. c:function:: CorgiStatus corgi_init_regexp(CorgiRegexp* regexp)
+
+Sets up ``regexp``.
+
+.. c:function:: CorgiStatus corgi_match(CorgiMatch* match, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end, CorgiChar* at, CorgiOptions opts)
+
+Trys to match ``regexp`` with a string which starts from ``begin`` and ends at
+``end``. Matching is started at ``at``.
+
+.. c:function:: CorgiStatus corgi_search(CorgiMatch* match, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end, CorgiChar* at, CorgiOptions opts)
+
+Searches ``regexp`` in a string which starts from ``begin`` and ends at ``end``.
+Searching is started from ``at``.
+
+.. c:function:: const char* corgi_strerror(CorgiStatus status)
+
+Converts a :c:type:`CorgiStatus` value to a string.
 
 Contact
 -------
