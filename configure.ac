@@ -27,6 +27,14 @@ AC_CHECK_SIZEOF(void*)
 
 # Checks for library functions.
 
+AC_ARG_ENABLE(profile,
+              AC_HELP_STRING([--enable-profile],
+                             [enable gprof profiling [[default=no]]]))
+if test "${enable_profile}" = "yes"; then
+    CFLAGS="-pg ${CFLAGS}"
+    LDFLAGS="-pg ${LDFLAGS}"
+fi
+
 AC_CONFIG_FILES([Makefile
                  src/Makefile
                  tests/Makefile])
