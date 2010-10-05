@@ -3070,16 +3070,18 @@ do_with_state(State* state, CorgiMatch* match, CorgiRegexp* regexp, Proc proc)
         /* TODO */
         return 42;
     }
-    CorgiGroup* groups = malloc(sizeof(CorgiGroup) * regexp->groups_num);
+    size_t size = sizeof(CorgiGroup) * regexp->groups_num;
+    CorgiGroup* groups = (CorgiGroup*)malloc(size);
     if (groups == NULL) {
         return ERR_OUT_OF_MEMORY;
     }
-    groups[0].begin = state->start - state->beginning;
-    groups[0].end = state->ptr - state->beginning;
+    CorgiChar* beginning = state->beginning;
+    groups[0].begin = state->start - beginning;
+    groups[0].end = state->ptr - beginning;
     CorgiUInt i;
     for (i = 1; i < regexp->groups_num; i++) {
-        groups[i].begin = state->mark[2 * (i - 1)] - state->beginning;
-        groups[i].end = state->mark[2 * (i - 1) + 1] - state->beginning;
+        groups[i].begin = state->mark[2 * (i - 1)] - beginning;
+        groups[i].end = state->mark[2 * (i - 1) + 1] - beginning;
     }
     match->groups = groups;
     return CORGI_OK;
