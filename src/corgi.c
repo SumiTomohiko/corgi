@@ -2051,6 +2051,7 @@ fini_compiler(Compiler* compiler)
 }
 
 enum NodeType {
+    NODE_ANY,
     NODE_AT,
     NODE_BRANCH,
     NODE_CATEGORY,
@@ -2357,6 +2358,10 @@ parse_single_pattern(Compiler* compiler, CorgiChar** pc, CorgiChar* end, Node** 
         (*pc)++;
         return parse_group(compiler, pc, end, node);
     }
+    if (**pc == '.') {
+        (*pc)++;
+        return create_node(compiler, NODE_ANY, node);
+    }
 
     CorgiStatus status = create_literal_node(compiler, **pc, node);
     if (status != CORGI_OK) {
@@ -2512,6 +2517,7 @@ parse_branch(Compiler* compiler, CorgiChar** pc, CorgiChar* end, Node** node)
 }
 
 enum InstructionType {
+    INST_ANY,
     INST_AT,
     INST_BRANCH,
     INST_CATEGORY,
@@ -2826,6 +2832,12 @@ max_repeat2instruction(Compiler* compiler, Node* node, Instruction** inst)
 }
 
 static CorgiStatus
+any2instruction(Compiler* compiler, Node* node, Instruction** inst)
+{
+    return create_instruction(compiler, INST_ANY, inst);
+}
+
+static CorgiStatus
 category2instruction(Compiler* compiler, Node* node, Instruction** inst)
 {
     CorgiStatus status = create_instruction(compiler, INST_CATEGORY, inst);
@@ -2841,6 +2853,9 @@ single_node2instruction(Compiler* compiler, Node* node, Instruction** inst)
 {
     CorgiStatus (*f)(Compiler*, Node*, Instruction**);
     switch (node->type) {
+    case NODE_ANY:
+        f = any2instruction;
+        break;
     case NODE_AT:
         f = at2instruction;
         break;
@@ -2901,6 +2916,8 @@ static CorgiUInt
 get_operands_number(Instruction* inst)
 {
     switch (inst->type) {
+    case INST_ANY:
+        return 0;
     case INST_AT:
         return 1;
     case INST_BRANCH:
@@ -2964,6 +2981,10 @@ static void
 write_code(CorgiCode** code, Instruction* inst)
 {
     switch (inst->type) {
+    case INST_ANY:
+        **code = SRE_OP_ANY;
+        (*code)++;
+        break;
     case INST_AT:
         **code = SRE_OP_AT;
         (*code)++;
@@ -3316,6 +3337,9 @@ dump_instruction(Instruction* inst)
     CorgiChar high;
     CorgiCode type;
     switch (inst->type) {
+    case INST_ANY:
+        printf("ANY");
+        break;
     case INST_AT:
         type = inst->u.at.type;
         printf("AT %u (%s)", type, at_type2name(type));
