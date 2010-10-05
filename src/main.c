@@ -23,6 +23,7 @@ typedef CorgiUInt Bool;
 struct Options {
     Bool debug;
     CorgiUInt group_id;
+    const char* group_name;
 };
 
 typedef struct Options Options;
@@ -173,7 +174,22 @@ conv_utf32_to_utf8(char* s, CorgiChar* begin, CorgiChar* end)
 static void
 print_error(const char* msg, CorgiStatus status)
 {
-    printf("%s: %s\n", msg, corgi_strerror(status));
+    printf("%s: %s (%u)\n", msg, corgi_strerror(status), status);
+}
+
+static CorgiStatus
+get_group_id(CorgiRegexp* regexp, Options* opts, CorgiUInt* group_id)
+{
+    if (opts->group_name == NULL) {
+        *group_id = opts->group_id;
+        return CORGI_OK;
+    }
+    const char* name = opts->group_name;
+    int size = count_chars(name);
+    CorgiChar* begin = (CorgiChar*)alloca(sizeof(CorgiChar) * size);
+    conv_utf8_to_utf32(begin, name);
+    CorgiChar* end = begin + size;
+    return corgi_group_name2id(regexp, begin, end, group_id);
 }
 
 typedef CorgiStatus (*Worker)(CorgiMatch*, CorgiRegexp*, CorgiChar*, CorgiChar*, CorgiChar*, CorgiOptions);
@@ -193,9 +209,22 @@ work_with_match(CorgiRegexp* regexp, CorgiMatch* match, Options* opts, const cha
     if (status != CORGI_OK) {
         return 1;
     }
-    CorgiUInt group_id = opts->group_id;
-    CorgiUInt matched_begin = match->groups[group_id].begin;
-    CorgiUInt matched_end = match->groups[group_id].end;
+    CorgiUInt group_id;
+    status = get_group_id(regexp, opts, &group_id);
+    if (status != CORGI_OK) {
+        print_error("Can't get group id", status);
+        return 1;
+    }
+    CorgiUInt matched_begin;
+    CorgiUInt matched_end;
+    if (group_id == 0) {
+        matched_begin = match->begin;
+        matched_end = match->end;
+    }
+    else {
+        matched_begin = match->groups[group_id - 1].begin;
+        matched_end = match->groups[group_id - 1].end;
+    }
     CorgiUInt matched_size = matched_end - matched_begin;
     char* u = (char*)alloca(6 * matched_size + 1);
     conv_utf32_to_utf8(u, target + matched_begin, target + matched_end);
@@ -311,6 +340,7 @@ main(int argc, char* argv[])
     struct option longopts[] = {
         { "debug", no_argument, NULL, 'd' },
         { "group-id", required_argument, NULL, 'g' },
+        { "group-name", required_argument, NULL, 'G' },
         { "help", no_argument, NULL, 'h' },
         { "version", no_argument, NULL, 'v' },
         { 0, 0, 0, 0 },
@@ -318,8 +348,14 @@ main(int argc, char* argv[])
     Options opts;
     bzero(&opts, sizeof(Options));
     int opt;
-    while ((opt = getopt_long(argc, argv, "dg:hv", longopts, NULL)) != -1) {
+    char* s;
+    while ((opt = getopt_long(argc, argv, "Gdg:hv", longopts, NULL)) != -1) {
         switch (opt) {
+        case 'G':
+            s = (char*)alloca(strlen(optarg) + 1);
+            strcpy(s, optarg);
+            opts.group_name = s;
+            break;
         case 'd':
             opts.debug = TRUE;
             break;

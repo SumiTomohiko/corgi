@@ -213,20 +213,28 @@ by :c:func:`corgi_init_regexp`, and must be cleaned up by
 :c:func:`corgi_init_match`, and clean up with
 :c:func:`corgi_fini_match`.
 
+.. c:member:: CorgiUInt CorgiMatch::begin
+
+Starting position of a matched part in the string.
+
+.. c:member:: CorgiUInt CorgiMatch::end
+
+Ending position of a matched part in the string.
+
 .. c:member:: CorgiGroup* CorgiMatch::groups
 
-``CorgiMatch::groups`` is an array. Elements of this are :c:type:`CorgiGroup`.
-The first element of this is for entire matching.
+``CorgiMatch::groups`` is an array. Elements of this are
+:c:type:`CorgiGroupPosition`.
 
-.. c:type:: CorgiGroup
+.. c:type:: CorgiGroupPosition
 
-:c:type:`CorgiGroup` tells range of a matched part in the string.
+:c:type:`CorgiGroupPosition` tells range of a matched part in the string.
 
-.. c:member:: CorgiUInt CorgiGroup::begin
+.. c:member:: CorgiUInt CorgiGroupPosition::begin
 
 This is a beginning position of the matched string.
 
-.. c:member:: CorgiUInt CorgiGroup::end
+.. c:member:: CorgiUInt CorgiGroupPosition::end
 
 This is an end position of the matched string.
 
@@ -239,8 +247,8 @@ Functions
 
 .. c:function:: CorgiStatus corgi_compile(CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end)
 
-Compiles a regular expression and contains results to ``regexp``. ``begin`` is a
-pointer to beginning of the regular expression, and ``end`` is a pointer to end.
+Compiles a regular expression and contains results to *regexp*. *begin* is a
+pointer to beginning of the regular expression, and *end* is a pointer to end.
 
 .. c:function:: CorgiStatus corgi_disassemble(CorgiRegexp* regexp)
 
@@ -248,29 +256,33 @@ Prints VM codes of a regular expression to standard output.
 
 .. c:function:: CorgiStatus corgi_fini_match(CorgiMatch* match)
 
-Cleans up data in ``match``.
+Cleans up data in *match*.
 
 .. c:function:: CorgiStatus corgi_fini_regexp(CorgiRegexp* regexp)
 
-Cleans up data in ``regexp``.
+Cleans up data in *regexp*.
+
+.. c:function:: CorgiStatus corgi_group_name2id(CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end, CorgiUInt* group_id)
+
+Converts a group name starting from *begin* to an index.
 
 .. c:function:: CorgiStatus corgi_init_match(CorgiMatch* match)
 
-Sets up ``match``.
+Sets up *match*.
 
 .. c:function:: CorgiStatus corgi_init_regexp(CorgiRegexp* regexp)
 
-Sets up ``regexp``.
+Sets up *regexp*.
 
 .. c:function:: CorgiStatus corgi_match(CorgiMatch* match, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end, CorgiChar* at, CorgiOptions opts)
 
-Trys to match ``regexp`` with a string which starts from ``begin`` and ends at
-``end``. Matching is started at ``at``.
+Trys to match *regexp* with a string which starts from *begin* and ends at
+*end*. Matching is started at *at*.
 
 .. c:function:: CorgiStatus corgi_search(CorgiMatch* match, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end, CorgiChar* at, CorgiOptions opts)
 
-Searches ``regexp`` in a string which starts from ``begin`` and ends at ``end``.
-Searching is started from ``at``.
+Searches *regexp* in a string which starts from *begin* and ends at *end*.
+Searching is started from *at*.
 
 .. c:function:: const char* corgi_strerror(CorgiStatus status)
 

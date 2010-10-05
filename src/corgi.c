@@ -36,6 +36,7 @@
 #include "corgi/config.h"
 #include <assert.h>
 #include <ctype.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -55,6 +56,12 @@
 #define ERR_BAD_RANGE               3
 #define ERR_BOGUS_ESCAPE            4
 #define ERR_PARENTHESIS_NOT_CLOSED  5
+#define ERR_NO_SUCH_GROUP           6
+
+struct CorgiGroup {
+    CorgiChar* begin;
+    CorgiChar* end;
+};
 
 static CorgiChar
 char2printable(CorgiChar c)
@@ -76,6 +83,8 @@ corgi_strerror(CorgiStatus status)
         return "Bogus escape (end of line)";
     case ERR_PARENTHESIS_NOT_CLOSED:
         return "Parenthesis not properly closed";
+    case ERR_NO_SUCH_GROUP:
+        return "No such group";
     default:
         return "Unknown error";
     }
@@ -1908,10 +1917,31 @@ corgi_init_regexp(CorgiRegexp* regexp)
     return CORGI_OK;
 }
 
+static void
+free_group(CorgiGroup* group)
+{
+    if (group == NULL) {
+        return;
+    }
+    free(group->begin);
+    free(group);
+}
+
+static void
+free_groups(CorgiGroup** groups, CorgiUInt groups_num)
+{
+    CorgiUInt i;
+    for (i = 0; i < groups_num; i++) {
+        free_group(groups[i]);
+    }
+    free(groups);
+}
+
 CorgiStatus
 corgi_fini_regexp(CorgiRegexp* regexp)
 {
     free(regexp->code);
+    free_groups(regexp->groups, regexp->groups_num);
     return CORGI_OK;
 }
 
@@ -1932,6 +1962,7 @@ corgi_fini_match(CorgiMatch* match)
 struct Compiler {
     struct Storage* storage;
     CorgiUInt group_id;
+    struct Node* groups;
 };
 
 typedef struct Compiler Compiler;
@@ -2065,6 +2096,9 @@ struct Node {
         struct {
             CorgiUInt group_id;
             struct Node* node;
+            CorgiChar* begin;
+            CorgiChar* end;
+            struct Node* next;
         } subpattern;
     } u;
     struct Node* next;
@@ -2242,11 +2276,44 @@ parse_escape(Compiler* compiler, CorgiChar** pc, CorgiChar* end, Node** node)
     return create_literal_node(compiler, c, node);
 }
 
+static void
+get_group_name(CorgiChar** pc, CorgiChar* end, CorgiChar** name_begin, CorgiChar** name_end)
+{
+    CorgiChar* rollback_to = *pc;
+    size_t prefix_size = strlen("?P<");
+    if (end <= *pc + prefix_size) {
+        return;
+    }
+    CorgiChar* p = *pc;
+    if ((p[0] != '?') || (p[1] != 'P') || (p[2] != '<')) {
+        return;
+    }
+    *pc += prefix_size;
+    CorgiChar* begin = *pc;
+    while ((*pc < end) && (**pc != '>')) {
+        (*pc)++;
+    }
+    if (begin == *pc) {
+        return;
+    }
+    if (*pc == end) {
+        *pc = rollback_to;
+        return;
+    }
+    *name_begin = begin;
+    *name_end = *pc;
+    (*pc)++;
+}
+
 static CorgiStatus parse_branch(Compiler*, CorgiChar**, CorgiChar*, Node**);
 
 static CorgiStatus
 parse_group(Compiler* compiler, CorgiChar** pc, CorgiChar* end, Node** node)
 {
+    CorgiChar* name_begin = NULL;
+    CorgiChar* name_end = NULL;
+    get_group_name(pc, end, &name_begin, &name_end);
+
     Node* n = NULL;
     CorgiStatus status = parse_branch(compiler, pc, end, &n);
     if (status != CORGI_OK) {
@@ -2263,6 +2330,10 @@ parse_group(Compiler* compiler, CorgiChar** pc, CorgiChar* end, Node** node)
     (*node)->u.subpattern.group_id = compiler->group_id;
     compiler->group_id++;
     (*node)->u.subpattern.node = n;
+    (*node)->u.subpattern.begin = name_begin;
+    (*node)->u.subpattern.end = name_end;
+    (*node)->u.subpattern.next = compiler->groups;
+    compiler->groups = *node;
     return CORGI_OK;
 }
 
@@ -3028,6 +3099,58 @@ parse_to_instruction(Compiler* compiler, CorgiChar* begin, CorgiChar* end, Instr
 }
 
 static CorgiStatus
+alloc_group(Node* node, CorgiGroup** pgroup)
+{
+    assert(node->type == NODE_SUBPATTERN);
+    if (node->u.subpattern.begin == NULL) {
+        *pgroup = NULL;
+        return CORGI_OK;
+    }
+    CorgiGroup* group = (CorgiGroup*)malloc(sizeof(CorgiGroup));
+    if (group == NULL) {
+        return ERR_OUT_OF_MEMORY;
+    }
+    bzero(group, sizeof(*group));
+    *pgroup = group;
+    ptrdiff_t n = node->u.subpattern.end - node->u.subpattern.begin;
+    size_t size = sizeof(CorgiChar) * n;
+    CorgiChar* name = (CorgiChar*)malloc(size);
+    if (name == NULL) {
+        return ERR_OUT_OF_MEMORY;
+    }
+    memcpy(name, node->u.subpattern.begin, size);
+    group->begin = name;
+    group->end = name + n;
+    return CORGI_OK;
+}
+
+static CorgiStatus
+alloc_groups(Compiler* compiler, CorgiUInt groups_num, CorgiGroup*** p)
+{
+    size_t size = sizeof(CorgiGroup*) * groups_num;
+    CorgiGroup** groups = (CorgiGroup**)malloc(size);
+    if (groups == NULL) {
+        return ERR_OUT_OF_MEMORY;
+    }
+    bzero(groups, size);
+    CorgiStatus status = CORGI_OK;
+    CorgiUInt i = 0;
+    Node* node = compiler->groups;
+    while ((node != NULL) && (status == CORGI_OK)) {
+        status = alloc_group(node, groups + i);
+        i++;
+        node = node->u.subpattern.next;
+    }
+    if (status != CORGI_OK) {
+        free_groups(groups, groups_num);
+        return status;
+    }
+    assert(i == groups_num);
+    *p = groups;
+    return CORGI_OK;
+}
+
+static CorgiStatus
 compile_with_compiler(Compiler* compiler, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end)
 {
     Instruction* inst = NULL;
@@ -3043,7 +3166,14 @@ compile_with_compiler(Compiler* compiler, CorgiRegexp* regexp, CorgiChar* begin,
     }
     regexp->code = code;
     regexp->code_size = code_size;
-    regexp->groups_num = compiler->group_id + 1;
+    CorgiGroup** groups = NULL;
+    CorgiUInt groups_num = compiler->group_id;
+    status = alloc_groups(compiler, groups_num, &groups);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    regexp->groups = groups;
+    regexp->groups_num = groups_num;
     return CORGI_OK;
 }
 
@@ -3070,18 +3200,18 @@ do_with_state(State* state, CorgiMatch* match, CorgiRegexp* regexp, Proc proc)
         /* TODO */
         return 42;
     }
-    size_t size = sizeof(CorgiGroup) * regexp->groups_num;
-    CorgiGroup* groups = (CorgiGroup*)malloc(size);
+    size_t size = sizeof(CorgiGroupPosition) * regexp->groups_num;
+    CorgiGroupPosition* groups = (CorgiGroupPosition*)malloc(size);
     if (groups == NULL) {
         return ERR_OUT_OF_MEMORY;
     }
     CorgiChar* beginning = state->beginning;
-    groups[0].begin = state->start - beginning;
-    groups[0].end = state->ptr - beginning;
+    match->begin = state->start - beginning;
+    match->end = state->ptr - beginning;
     CorgiUInt i;
-    for (i = 1; i < regexp->groups_num; i++) {
-        groups[i].begin = state->mark[2 * (i - 1)] - beginning;
-        groups[i].end = state->mark[2 * (i - 1) + 1] - beginning;
+    for (i = 0; i < regexp->groups_num; i++) {
+        groups[i].begin = state->mark[2 * i] - beginning;
+        groups[i].end = state->mark[2 * i + 1] - beginning;
     }
     match->groups = groups;
     return CORGI_OK;
@@ -3546,6 +3676,40 @@ CorgiStatus
 corgi_search(CorgiMatch* match, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end, CorgiChar* at, CorgiOptions opts)
 {
     return corgi_main(match, regexp, begin, end, at, opts, sre_search);
+}
+
+static Bool
+compare_group_name(CorgiChar* begin, CorgiChar* end, CorgiGroup* group)
+{
+    if (group == NULL) {
+        return FALSE;
+    }
+    CorgiChar* begin2 = group->begin;
+    CorgiChar* end2 = group->end;
+    ptrdiff_t size = end - begin;
+    ptrdiff_t size2 = end2 - begin2;
+    if (size != size2) {
+        return FALSE;
+    }
+    if (memcmp(begin, begin2, sizeof(CorgiChar) * size) != 0) {
+        return FALSE;
+    }
+    return TRUE;
+}
+
+CorgiStatus
+corgi_group_name2id(CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end, CorgiUInt* group_id)
+{
+    Bool b = FALSE;
+    CorgiUInt i;
+    for (i = 0; (i < regexp->groups_num) && !b; i++) {
+        b = compare_group_name(begin, end, regexp->groups[i]);
+    }
+    if (b) {
+        *group_id = i - 1;
+        return CORGI_OK;
+    }
+    return ERR_NO_SUCH_GROUP;
 }
 
 /**

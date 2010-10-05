@@ -31,23 +31,28 @@ typedef CorgiInt CorgiStatus;
 
 typedef CorgiChar CorgiCode;
 
+typedef struct CorgiGroup CorgiGroup;
+
 struct CorgiRegexp {
     CorgiCode* code;
     CorgiUInt code_size;
     CorgiUInt groups_num;
+    struct CorgiGroup** groups;
 };
 
 typedef struct CorgiRegexp CorgiRegexp;
 
-struct CorgiGroup {
+struct CorgiGroupPosition {
     CorgiUInt begin;
     CorgiUInt end;
 };
 
-typedef struct CorgiGroup CorgiGroup;
+typedef struct CorgiGroupPosition CorgiGroupPosition;
 
 struct CorgiMatch {
-    CorgiGroup* groups;
+    CorgiUInt begin;
+    CorgiUInt end;
+    struct CorgiGroupPosition* groups;
 };
 
 typedef struct CorgiMatch CorgiMatch;
@@ -60,6 +65,7 @@ CorgiStatus corgi_disassemble(CorgiRegexp*);
 CorgiStatus corgi_dump(CorgiChar*, CorgiChar*);
 CorgiStatus corgi_fini_match(CorgiMatch*);
 CorgiStatus corgi_fini_regexp(CorgiRegexp*);
+CorgiStatus corgi_group_name2id(CorgiRegexp*, CorgiChar*, CorgiChar*, CorgiUInt*);
 CorgiStatus corgi_init_match(CorgiMatch*);
 CorgiStatus corgi_init_regexp(CorgiRegexp*);
 CorgiStatus corgi_match(CorgiMatch*, CorgiRegexp*, CorgiChar*, CorgiChar*, CorgiChar*, CorgiOptions);
