@@ -206,7 +206,11 @@ work_with_match(CorgiRegexp* regexp, CorgiMatch* match, Options* opts, const cha
         corgi_opts |= CORGI_OPT_DEBUG;
     }
     CorgiStatus status = f(match, regexp, target, end, target, corgi_opts);
+    if (status == CORGI_MISMATCH) {
+        return 1;
+    }
     if (status != CORGI_OK) {
+        print_error("Match failed", status);
         return 1;
     }
     CorgiUInt group_id;

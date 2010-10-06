@@ -27,7 +27,8 @@ typedef unsigned NUMBER_TYPE CorgiUInt;
 #undef NUMBER_TYPE
 typedef CorgiInt CorgiStatus;
 
-#define CORGI_OK 0
+#define CORGI_OK        0
+#define CORGI_MISMATCH  1
 
 typedef CorgiChar CorgiCode;
 

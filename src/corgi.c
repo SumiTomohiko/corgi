@@ -2742,8 +2742,7 @@ do_with_state(State* state, CorgiMatch* match, CorgiRegexp* regexp, Proc proc)
 {
     CorgiInt ret = proc(state, regexp->code);
     if (ret == 0) {
-        /* TODO */
-        return 42;
+        return CORGI_MISMATCH;
     }
     size_t size = sizeof(CorgiRange) * regexp->groups_num;
     CorgiRange* groups = (CorgiRange*)malloc(size);
