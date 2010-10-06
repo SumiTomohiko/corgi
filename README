@@ -264,7 +264,9 @@ Sets up *regexp*.
 .. c:function:: CorgiStatus corgi_match(CorgiMatch* match, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end, CorgiChar* at, CorgiOptions opts)
 
 Trys to match *regexp* with a string which starts from *begin* and ends at
-*end*. Matching is started at *at*.
+*end*. Matching is started at *at*. When the string matches with *regexp*,
+:c:func:`corgi_match` returns :c:data:`CORGI_OK`. If the string doesn't match
+with *regexp*, :c:func:`corgi_match` returns :c:data:`CORGI_MISMATCH`.
 
 .. c:function:: CorgiStatus corgi_search(CorgiMatch* match, CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end, CorgiChar* at, CorgiOptions opts)
 
