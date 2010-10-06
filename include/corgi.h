@@ -42,17 +42,13 @@ struct CorgiRegexp {
 
 typedef struct CorgiRegexp CorgiRegexp;
 
-struct CorgiGroupPosition {
-    CorgiUInt begin;
-    CorgiUInt end;
-};
-
-typedef struct CorgiGroupPosition CorgiGroupPosition;
+typedef struct CorgiRange CorgiRange;
 
 struct CorgiMatch {
+    struct CorgiRegexp* regexp;
     CorgiUInt begin;
     CorgiUInt end;
-    struct CorgiGroupPosition* groups;
+    struct CorgiRange* groups;
 };
 
 typedef struct CorgiMatch CorgiMatch;
@@ -65,6 +61,7 @@ CorgiStatus corgi_disassemble(CorgiRegexp*);
 CorgiStatus corgi_dump(CorgiChar*, CorgiChar*);
 CorgiStatus corgi_fini_match(CorgiMatch*);
 CorgiStatus corgi_fini_regexp(CorgiRegexp*);
+CorgiStatus corgi_get_group_range(CorgiMatch*, CorgiUInt, CorgiUInt*, CorgiUInt*);
 CorgiStatus corgi_group_name2id(CorgiRegexp*, CorgiChar*, CorgiChar*, CorgiUInt*);
 CorgiStatus corgi_init_match(CorgiMatch*);
 CorgiStatus corgi_init_regexp(CorgiRegexp*);

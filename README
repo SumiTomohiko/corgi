@@ -221,23 +221,6 @@ Starting position of a matched part in the string.
 
 Ending position of a matched part in the string.
 
-.. c:member:: CorgiGroup* CorgiMatch::groups
-
-``CorgiMatch::groups`` is an array. Elements of this are
-:c:type:`CorgiGroupPosition`.
-
-.. c:type:: CorgiGroupPosition
-
-:c:type:`CorgiGroupPosition` tells range of a matched part in the string.
-
-.. c:member:: CorgiUInt CorgiGroupPosition::begin
-
-This is a beginning position of the matched string.
-
-.. c:member:: CorgiUInt CorgiGroupPosition::end
-
-This is an end position of the matched string.
-
 .. c:type:: CorgiOptions
 
 Variables of this data type are to contain flags.
@@ -261,6 +244,10 @@ Cleans up data in *match*.
 .. c:function:: CorgiStatus corgi_fini_regexp(CorgiRegexp* regexp)
 
 Cleans up data in *regexp*.
+
+.. c:function:: CorgiStatus corgi_get_group_range(CorgiMatch* match, CorgiUInt group_id, CorgiUInt* begin, CorgiUInt* end)
+
+Sets range of a group of *group_id* to *begin* and *end*.
 
 .. c:function:: CorgiStatus corgi_group_name2id(CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end, CorgiUInt* group_id)
 

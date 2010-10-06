@@ -63,6 +63,11 @@ struct CorgiGroup {
     CorgiChar* end;
 };
 
+struct CorgiRange {
+    CorgiUInt begin;
+    CorgiUInt end;
+};
+
 static CorgiChar
 char2printable(CorgiChar c)
 {
@@ -3222,11 +3227,12 @@ do_with_state(State* state, CorgiMatch* match, CorgiRegexp* regexp, Proc proc)
         /* TODO */
         return 42;
     }
-    size_t size = sizeof(CorgiGroupPosition) * regexp->groups_num;
-    CorgiGroupPosition* groups = (CorgiGroupPosition*)malloc(size);
+    size_t size = sizeof(CorgiRange) * regexp->groups_num;
+    CorgiRange* groups = (CorgiRange*)malloc(size);
     if (groups == NULL) {
         return ERR_OUT_OF_MEMORY;
     }
+    match->regexp = regexp;
     CorgiChar* beginning = state->beginning;
     match->begin = state->start - beginning;
     match->end = state->ptr - beginning;
@@ -3735,6 +3741,17 @@ corgi_group_name2id(CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end, Corgi
         return CORGI_OK;
     }
     return ERR_NO_SUCH_GROUP;
+}
+
+CorgiStatus
+corgi_get_group_range(CorgiMatch* match, CorgiUInt group_id, CorgiUInt* begin, CorgiUInt* end)
+{
+    if (match->regexp->groups_num <= group_id) {
+        return ERR_NO_SUCH_GROUP;
+    }
+    *begin = match->groups[group_id].begin;
+    *end = match->groups[group_id].end;
+    return CORGI_OK;
 }
 
 /**

@@ -222,8 +222,7 @@ work_with_match(CorgiRegexp* regexp, CorgiMatch* match, Options* opts, const cha
         matched_end = match->end;
     }
     else {
-        matched_begin = match->groups[group_id - 1].begin;
-        matched_end = match->groups[group_id - 1].end;
+        corgi_get_group_range(match, group_id - 1, &matched_begin, &matched_end);
     }
     CorgiUInt matched_size = matched_end - matched_begin;
     char* u = (char*)alloca(6 * matched_size + 1);
