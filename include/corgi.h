@@ -55,11 +55,12 @@ struct CorgiMatch {
 typedef struct CorgiMatch CorgiMatch;
 
 typedef CorgiUInt CorgiOptions;
-#define CORGI_OPT_DEBUG (1 << 0)
+#define CORGI_OPT_DEBUG         (1 << 0)
+#define CORGI_OPT_IGNORE_CASE   (1 << 1)
 
-CorgiStatus corgi_compile(CorgiRegexp*, CorgiChar*, CorgiChar*);
+CorgiStatus corgi_compile(CorgiRegexp*, CorgiChar*, CorgiChar*, CorgiOptions);
 CorgiStatus corgi_disassemble(CorgiRegexp*);
-CorgiStatus corgi_dump(CorgiChar*, CorgiChar*);
+CorgiStatus corgi_dump(CorgiChar*, CorgiChar*, CorgiOptions);
 CorgiStatus corgi_fini_match(CorgiMatch*);
 CorgiStatus corgi_fini_regexp(CorgiRegexp*);
 CorgiStatus corgi_get_group_range(CorgiMatch*, CorgiUInt, CorgiUInt*, CorgiUInt*);

@@ -24,6 +24,7 @@ struct Options {
     Bool debug;
     CorgiUInt group_id;
     const char* group_name;
+    Bool ignore_case;
 };
 
 typedef struct Options Options;
@@ -238,10 +239,15 @@ work_with_match(CorgiRegexp* regexp, CorgiMatch* match, Options* opts, const cha
 static int
 work_with_regexp(CorgiRegexp* regexp, Options* opts, const char* s, const char* t, Worker f)
 {
-    int pattern_size = count_chars(s);
-    CorgiChar* pattern = (CorgiChar*)alloca(sizeof(CorgiChar) * pattern_size);
-    conv_utf8_to_utf32(pattern, s);
-    CorgiStatus status = corgi_compile(regexp, pattern, pattern + pattern_size);
+    int size = count_chars(s);
+    CorgiChar* begin = (CorgiChar*)alloca(sizeof(CorgiChar) * size);
+    conv_utf8_to_utf32(begin, s);
+    CorgiChar* end = begin + size;
+    CorgiOptions corgi_opts = 0;
+    if (opts->ignore_case) {
+        corgi_opts |= CORGI_OPT_IGNORE_CASE;
+    }
+    CorgiStatus status = corgi_compile(regexp, begin, end, corgi_opts);
     if (status != CORGI_OK) {
         print_error("Compile failed", status);
         return 1;
@@ -269,7 +275,7 @@ work_main(Options* opts, int argc, char* argv[], Worker f)
 }
 
 static int
-dump_main(int argc, char* argv[])
+dump_main(Options* opts, int argc, char* argv[])
 {
     if (argc < 1) {
         usage();
@@ -278,19 +284,28 @@ dump_main(int argc, char* argv[])
     int size = count_chars(argv[0]);
     CorgiChar* re = alloca(sizeof(CorgiChar) * size);
     conv_utf8_to_utf32(re, argv[0]);
-    if (corgi_dump(re, re + size) != CORGI_OK) {
+    CorgiOptions corgi_opts = 0;
+    if (opts->ignore_case) {
+        corgi_opts |= CORGI_OPT_IGNORE_CASE;
+    }
+    if (corgi_dump(re, re + size, corgi_opts) != CORGI_OK) {
         return 1;
     }
     return 0;
 }
 
 static int
-disassemble_with_regexp(CorgiRegexp* regexp, const char* s)
+disassemble_with_regexp(Options* opts, CorgiRegexp* regexp, const char* s)
 {
-    int pattern_size = count_chars(s);
-    CorgiChar* pattern = (CorgiChar*)alloca(sizeof(CorgiChar) * pattern_size);
-    conv_utf8_to_utf32(pattern, s);
-    if (corgi_compile(regexp, pattern, pattern + pattern_size) != CORGI_OK) {
+    int size = count_chars(s);
+    CorgiChar* begin = (CorgiChar*)alloca(sizeof(CorgiChar) * size);
+    conv_utf8_to_utf32(begin, s);
+    CorgiChar* end = begin + size;
+    CorgiOptions corgi_opts = 0;
+    if (opts->ignore_case) {
+        corgi_opts |= CORGI_OPT_IGNORE_CASE;
+    }
+    if (corgi_compile(regexp, begin, end, corgi_opts) != CORGI_OK) {
         return 1;
     }
     if (corgi_disassemble(regexp) != CORGI_OK) {
@@ -300,7 +315,7 @@ disassemble_with_regexp(CorgiRegexp* regexp, const char* s)
 }
 
 static int
-disassemble_main(int argc, char* argv[])
+disassemble_main(Options* opts, int argc, char* argv[])
 {
     if (argc < 1) {
         usage();
@@ -308,7 +323,7 @@ disassemble_main(int argc, char* argv[])
     }
     CorgiRegexp regexp;
     corgi_init_regexp(&regexp);
-    int ret = disassemble_with_regexp(&regexp, argv[0]);
+    int ret = disassemble_with_regexp(opts, &regexp, argv[0]);
     corgi_fini_regexp(&regexp);
     return ret;
 }
@@ -328,10 +343,10 @@ corgi_main(Options* opts, int argc, char* argv[])
         return work_main(opts, cmd_argc, cmd_argv, f);
     }
     if (strcmp(cmd, "dump") == 0) {
-        return dump_main(cmd_argc, cmd_argv);
+        return dump_main(opts, cmd_argc, cmd_argv);
     }
     if (strcmp(cmd, "disassemble") == 0) {
-        return disassemble_main(cmd_argc, cmd_argv);
+        return disassemble_main(opts, cmd_argc, cmd_argv);
     }
     usage();
     return 1;
@@ -345,6 +360,7 @@ main(int argc, char* argv[])
         { "group-id", required_argument, NULL, 'g' },
         { "group-name", required_argument, NULL, 'G' },
         { "help", no_argument, NULL, 'h' },
+        { "ignore-case", no_argument, NULL, 'i' },
         { "version", no_argument, NULL, 'v' },
         { 0, 0, 0, 0 },
     };
@@ -352,7 +368,7 @@ main(int argc, char* argv[])
     bzero(&opts, sizeof(Options));
     int opt;
     char* s;
-    while ((opt = getopt_long(argc, argv, "Gdg:hv", longopts, NULL)) != -1) {
+    while ((opt = getopt_long(argc, argv, "Gdg:hiv", longopts, NULL)) != -1) {
         switch (opt) {
         case 'G':
             s = (char*)alloca(strlen(optarg) + 1);
@@ -368,6 +384,9 @@ main(int argc, char* argv[])
         case 'h':
             usage();
             return 0;
+        case 'i':
+            opts.ignore_case = TRUE;
+            break;
         case 'v':
             printf("corgi %s\n", CORGI_PACKAGE_VERSION);
             return 0;

@@ -1486,6 +1486,7 @@ struct Compiler {
     struct Storage* storage;
     CorgiUInt group_id;
     struct Node* groups;
+    Bool ignore_case;
 };
 
 typedef struct Compiler Compiler;
@@ -1555,7 +1556,7 @@ alloc(Compiler* compiler, CorgiUInt size)
 }
 
 static CorgiStatus
-init_compiler(Compiler* compiler)
+init_compiler(Compiler* compiler, Bool ignore_case)
 {
     bzero(compiler, sizeof(*compiler));
     Storage* storage = alloc_storage(NULL);
@@ -1563,6 +1564,7 @@ init_compiler(Compiler* compiler)
         return ERR_OUT_OF_MEMORY;
     }
     compiler->storage = storage;
+    compiler->ignore_case = ignore_case;
     return CORGI_OK;
 }
 
@@ -2502,7 +2504,7 @@ compute_instruction_position(Instruction* inst)
 }
 
 static void
-write_code(CorgiCode** code, Instruction* inst)
+write_code(Compiler* compiler, CorgiCode** code, Instruction* inst)
 {
     switch (inst->type) {
     case INST_ANY:
@@ -2544,7 +2546,7 @@ write_code(CorgiCode** code, Instruction* inst)
     case INST_LABEL:
         break;
     case INST_LITERAL:
-        **code = SRE_OP_LITERAL;
+        **code = compiler->ignore_case ? SRE_OP_LITERAL_IGNORE : SRE_OP_LITERAL;
         (*code)++;
         **code = inst->u.literal.c;
         (*code)++;
@@ -2599,24 +2601,24 @@ write_code(CorgiCode** code, Instruction* inst)
 }
 
 static void
-instruction2binary(CorgiCode* code, Instruction* inst)
+instruction2binary(Compiler* compiler, CorgiCode* code, Instruction* inst)
 {
     CorgiCode** p = &code;
     Instruction* i;
     for (i = inst; i != NULL; i = i->next) {
-        write_code(p, i);
+        write_code(compiler, p, i);
     }
 }
 
 static CorgiStatus
-instruction2code(Instruction* inst, CorgiCode** code, CorgiUInt* code_size)
+instruction2code(Compiler* compiler, Instruction* inst, CorgiCode** code, CorgiUInt* code_size)
 {
     *code_size = compute_instruction_position(inst);
     *code = (CorgiCode*)malloc(sizeof(CorgiCode) * *code_size);
     if (*code == NULL) {
         return ERR_OUT_OF_MEMORY;
     }
-    instruction2binary(*code, inst);
+    instruction2binary(compiler, *code, inst);
 
     return CORGI_OK;
 }
@@ -2705,7 +2707,7 @@ compile_with_compiler(Compiler* compiler, CorgiRegexp* regexp, CorgiChar* begin,
     }
     CorgiCode* code = NULL;
     CorgiUInt code_size = 0;
-    status = instruction2code(inst, &code, &code_size);
+    status = instruction2code(compiler, inst, &code, &code_size);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2723,10 +2725,10 @@ compile_with_compiler(Compiler* compiler, CorgiRegexp* regexp, CorgiChar* begin,
 }
 
 CorgiStatus
-corgi_compile(CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end)
+corgi_compile(CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end, CorgiOptions opts)
 {
     Compiler compiler;
-    CorgiStatus status = init_compiler(&compiler);
+    CorgiStatus status = init_compiler(&compiler, opts & CORGI_OPT_IGNORE_CASE);
     if (status != CORGI_OK) {
         return status;
     }
@@ -2941,10 +2943,10 @@ dump_with_compiler(Compiler* compiler, CorgiChar* begin, CorgiChar* end)
 }
 
 CorgiStatus
-corgi_dump(CorgiChar* begin, CorgiChar* end)
+corgi_dump(CorgiChar* begin, CorgiChar* end, CorgiOptions opts)
 {
     Compiler compiler;
-    init_compiler(&compiler);
+    init_compiler(&compiler, opts & CORGI_OPT_IGNORE_CASE);
     CorgiStatus status = dump_with_compiler(&compiler, begin, end);
     fini_compiler(&compiler);
     return status;
