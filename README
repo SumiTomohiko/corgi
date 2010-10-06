@@ -106,23 +106,23 @@ Syntax
 Syntax Elements
 ~~~~~~~~~~~~~~~
 
-===== ===============
-\|     alternation
-(...)  group
-[...]  character class
-===== ===============
+========= ===============
+``|``     alternation
+``(...)`` group
+``[...]`` character class
+========= ===============
 
 Character Types
 ~~~~~~~~~~~~~~~
 
-=== ==================================================================
-\\w word character (Letter \| Mark \| Number \| Connector-Punctuation)
-\\W non word character
-\\s white space character (0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x85)
-\\S no white space character
-\\d decimal number (GeneralCategory - DecimalNumber)
-\\D non decimal digit character
-=== ==================================================================
+====== ==================================================================
+``\w`` word character (Letter \| Mark \| Number \| Connector-Punctuation)
+``\W`` non word character
+``\s`` white space character (``0x09``, ``0x0a``, ``0x0b``, ``0x0c``, ``0x0d``, ``0x85``)
+``\S`` no white space character
+``\d`` decimal number (GeneralCategory - DecimalNumber)
+``\D`` non decimal digit character
+====== ==================================================================
 
 Quantifier
 ~~~~~~~~~~
@@ -130,48 +130,48 @@ Quantifier
 greedy
 ^^^^^^
 
-====== ============================================
-?      1 or 0 times
-\*     0 or more times
-\+     1 or more times
-{n,m}  at least n but not more than m times
-{n,}   at least n times
-{,n}   at least 0 but not more than n times ({0,n})
-{n}    n times
-====== ============================================
+========= ================================================
+``?``     1 or 0 times
+``*``     0 or more times
+``+``     1 or more times
+``{n,m}`` at least n but not more than m times
+``{n,}``  at least n times
+``{,n}``  at least 0 but not more than n times (``{0,n}``)
+``{n}``   n times
+========= ================================================
 
 reluctant
 ^^^^^^^^^
 
-========= ================================================
-??        1 or 0 times
-\*?       0 or more times
-\+?       1 or more times
-{n,m}?    at least n but not more than m times
-{n,}?     at least n times
-{,n}?     at least 0 but not more than n times (== {0,n}?)
-========= ================================================
+========== ====================================================
+``??``     1 or 0 times
+``*?``     0 or more times
+``+?``     1 or more times
+``{n,m}?`` at least n but not more than m times
+``{n,}?``  at least n times
+``{,n}?``  at least 0 but not more than n times (== ``{0,n}?``)
+========== ====================================================
 
 Anchors
 ~~~~~~~
 
-=== ============================================
-^   beginning of the line
-$   end of the line
-\\b word boundary
-\\B not word boundary
-\\A beginning of string
-\\Z end of string, or before newline at the end
-=== ============================================
+====== ===========================================
+``^``  beginning of the line
+``$``  end of the line
+``\b`` word boundary
+``\B`` not word boundary
+``\A`` beginning of string
+``\Z`` end of string, or before newline at the end
+====== ===========================================
 
 Character class
 ~~~~~~~~~~~~~~~
 
-===== ===========================================
-^...  negative class (lowest precedence operator)
-x-y   range from x to y
-[...] set (character class in character class)
-===== ===========================================
+========= ===========================================
+``^...``  negative class (lowest precedence operator)
+``x-y``   range from x to y
+``[...]`` set (character class in character class)
+========= ===========================================
 
 API
 ---
