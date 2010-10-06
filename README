@@ -64,6 +64,7 @@ the string. ``match`` subcommand's usage is::
 ``OPTIONS`` are
 
 * ``--group-id``: group number to show
+* ``--ignore-case``: ignore case
 
 For example::
 
