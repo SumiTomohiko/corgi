@@ -51,12 +51,12 @@
 #define SRE_ERROR_RECURSION_LIMIT   -3  /* runaway recursion */
 #define SRE_ERROR_MEMORY            -9  /* out of memory */
 #define SRE_ERROR_INTERRUPTED       -10 /* signal handler raised exception */
-#define ERR_OUT_OF_MEMORY           1
-#define ERR_INVALID_NODE            2
-#define ERR_BAD_RANGE               3
-#define ERR_BOGUS_ESCAPE            4
-#define ERR_PARENTHESIS_NOT_CLOSED  5
-#define ERR_NO_SUCH_GROUP           6
+#define ERR_OUT_OF_MEMORY           2
+#define ERR_INVALID_NODE            3
+#define ERR_BAD_RANGE               4
+#define ERR_BOGUS_ESCAPE            5
+#define ERR_PARENTHESIS_NOT_CLOSED  6
+#define ERR_NO_SUCH_GROUP           7
 
 struct CorgiGroup {
     CorgiChar* begin;
