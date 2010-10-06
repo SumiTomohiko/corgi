@@ -2314,6 +2314,8 @@ parse_group(Compiler* compiler, CorgiChar** pc, CorgiChar* end, Node** node)
     CorgiChar* name_begin = NULL;
     CorgiChar* name_end = NULL;
     get_group_name(pc, end, &name_begin, &name_end);
+    CorgiUInt group_id = compiler->group_id;
+    compiler->group_id++;
 
     Node* n = NULL;
     CorgiStatus status = parse_branch(compiler, pc, end, &n);
@@ -2328,8 +2330,7 @@ parse_group(Compiler* compiler, CorgiChar** pc, CorgiChar* end, Node** node)
     if (status != CORGI_OK) {
         return status;
     }
-    (*node)->u.subpattern.group_id = compiler->group_id;
-    compiler->group_id++;
+    (*node)->u.subpattern.group_id = group_id;
     (*node)->u.subpattern.node = n;
     (*node)->u.subpattern.begin = name_begin;
     (*node)->u.subpattern.end = name_end;
