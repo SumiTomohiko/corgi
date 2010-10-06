@@ -223,12 +223,17 @@ Ending position of a matched part in the string.
 
 .. c:type:: CorgiOptions
 
-Variables of this data type are to contain flags.
+Variables of this data type are to contain flags. The followings flags are
+allowed.
+
+=============================== ===========
+:c:data:`CORGI_OPT_IGNORE_CASE` Ignore case
+=============================== ===========
 
 Functions
 ~~~~~~~~~
 
-.. c:function:: CorgiStatus corgi_compile(CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end)
+.. c:function:: CorgiStatus corgi_compile(CorgiRegexp* regexp, CorgiChar* begin, CorgiChar* end, CorgiOptions opts)
 
 Compiles a regular expression and contains results to *regexp*. *begin* is a
 pointer to beginning of the regular expression, and *end* is a pointer to end.
