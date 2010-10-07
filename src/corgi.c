@@ -1672,6 +1672,8 @@ create_two_literal_nodes(Compiler* compiler, CorgiChar c1, CorgiChar c2, Node** 
     return CORGI_OK;
 }
 
+static CorgiStatus parse_escape(Compiler*, CorgiChar**, CorgiChar*, Node**);
+
 static CorgiStatus
 parse_in_internal(Compiler* compiler, CorgiChar** pc, CorgiChar* end, Node** node)
 {
@@ -1679,6 +1681,9 @@ parse_in_internal(Compiler* compiler, CorgiChar** pc, CorgiChar* end, Node** nod
     (*pc)++;
     if (c == '^') {
         return create_node(compiler, NODE_NEGATE, node);
+    }
+    if (c == '\\') {
+        return parse_escape(compiler, pc, end, node);
     }
     if ((end <= *pc) || (**pc != '-')) {
         return create_literal_node(compiler, c, node);
