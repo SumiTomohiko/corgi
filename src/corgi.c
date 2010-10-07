@@ -1806,12 +1806,13 @@ static void
 get_group_name(CorgiChar** pc, CorgiChar* end, CorgiChar** name_begin, CorgiChar** name_end)
 {
     CorgiChar* rollback_to = *pc;
-    size_t prefix_size = strlen("?P<");
+    const char* prefix = "?<";
+    size_t prefix_size = strlen(prefix);
     if (end <= *pc + prefix_size) {
         return;
     }
     CorgiChar* p = *pc;
-    if ((p[0] != '?') || (p[1] != 'P') || (p[2] != '<')) {
+    if ((p[0] != prefix[0]) || (p[1] != prefix[1])) {
         return;
     }
     *pc += prefix_size;
