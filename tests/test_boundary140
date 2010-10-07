@@ -1,6 +1,6 @@
 #!/bin/sh
 
-matched=`"${CORGI}" match "foo\$" "foo"`
+matched=`"${CORGI}" match "foo\\\$" "foo"`
 if [ "${matched}" != "foo" ]; then
   exit 1
 fi

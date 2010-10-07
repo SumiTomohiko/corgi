@@ -1,6 +1,6 @@
 #!/bin/sh
 
-matched=`"${CORGI}" match "\\W" "x"`
+matched=`"${CORGI}" match "\\\\W" "x"`
 if [ ! -z "${matched}" ]; then
   exit 1
 fi
