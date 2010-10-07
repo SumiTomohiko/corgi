@@ -2014,11 +2014,13 @@ parse_subpattern(Compiler* compiler, CorgiChar** pc, CorgiChar* end, Node** node
 static CorgiStatus
 parse_branch(Compiler* compiler, CorgiChar** pc, CorgiChar* end, Node** node)
 {
+    if (end <= *pc) {
+        return CORGI_OK;
+    }
     CorgiStatus status = create_node(compiler, NODE_BRANCH, node);
     if (status != CORGI_OK) {
         return status;
     }
-    (*node)->u.branch.left = (*node)->u.branch.right = NULL;
 
     Node* left = NULL;
     status = parse_subpattern(compiler, pc, end, &left);
@@ -2027,7 +2029,7 @@ parse_branch(Compiler* compiler, CorgiChar** pc, CorgiChar* end, Node** node)
     }
     (*node)->u.branch.left = left;
 
-    if ((end <= (*pc)) || ((**pc) != '|')) {
+    if ((end <= *pc) || (**pc != '|')) {
         *node = left;
         return CORGI_OK;
     }
@@ -2421,6 +2423,9 @@ single_node2instruction(Compiler* compiler, Node* node, Instruction** inst)
 static CorgiStatus
 node2instruction(Compiler* compiler, Node* node, Instruction** inst)
 {
+    if (node == NULL) {
+        return CORGI_OK;
+    }
     CorgiStatus status = single_node2instruction(compiler, node, inst);
     if (status != CORGI_OK) {
         return status;
@@ -2641,6 +2646,11 @@ parse_to_instruction(Compiler* compiler, CorgiChar* begin, CorgiChar* end, Instr
     status = create_instruction(compiler, INST_SUCCESS, &success);
     if (status != CORGI_OK) {
         return status;
+    }
+    Instruction* last = get_last_instruction(*inst);
+    if (last == NULL) {
+        *inst = success;
+        return CORGI_OK;
     }
     get_last_instruction(*inst)->next = success;
     return CORGI_OK;
