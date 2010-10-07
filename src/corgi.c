@@ -1825,8 +1825,14 @@ parse_escape(Compiler* compiler, CorgiChar** pc, CorgiChar* end, Node** node)
         return create_at_node(compiler, SRE_AT_BOUNDARY, node);
     case 'd':
         return create_in_with_category_node(compiler, SRE_CATEGORY_UNI_DIGIT, node);
+    case 'n':
+        return create_literal_node(compiler, '\n', node);
+    case 'r':
+        return create_literal_node(compiler, '\r', node);
     case 's':
         return create_in_with_category_node(compiler, SRE_CATEGORY_UNI_SPACE, node);
+    case 't':
+        return create_literal_node(compiler, '\t', node);
     case 'w':
         return create_in_with_category_node(compiler, SRE_CATEGORY_UNI_WORD, node);
     default:
