@@ -1713,13 +1713,41 @@ create_in_node(Compiler* compiler, Node** node)
 }
 
 static CorgiStatus
+read_first_bracket_in_charset(Compiler* compiler, CorgiChar** pc, CorgiChar* end, Node* parent)
+{
+    if ((end <= *pc) || (**pc != ']')) {
+        return CORGI_OK;
+    }
+    CorgiChar c = **pc;
+    assert(c == ']');
+    (*pc)++;
+    Node* node = NULL;
+    CorgiStatus status = create_literal_node(compiler, c, &node);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    parent->u.in.set = node;
+    return CORGI_OK;
+}
+
+static Node**
+get_last_node_of_charset(Node* node)
+{
+    return node->u.in.set != NULL ? &node->u.in.set->next : &node->u.in.set;
+}
+
+static CorgiStatus
 parse_in(Compiler* compiler, CorgiChar** pc, CorgiChar* end, Node** node)
 {
     CorgiStatus status = create_in_node(compiler, node);
     if (status != CORGI_OK) {
         return status;
     }
-    Node** last = &(*node)->u.in.set;
+    status = read_first_bracket_in_charset(compiler, pc, end, *node);
+    if (status != CORGI_OK) {
+        return status;
+    }
+    Node** last = get_last_node_of_charset(*node);
     while ((status == CORGI_OK) && (*pc < end) && (**pc != ']')) {
         Node* node = NULL;
         status = parse_in_internal(compiler, pc, end, &node);
