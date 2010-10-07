@@ -1403,7 +1403,7 @@ sre_search(State* state, CorgiCode* pattern)
     }
     else {
         /* general case */
-        while (ptr < end) {
+        while (ptr <= end) {
             TRACE(("|%p|%p(%c)|SEARCH\n", pattern, ptr, char2printable(*ptr)));
             state->start = state->ptr = ptr++;
             status = sre_match(state, pattern);
