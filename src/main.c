@@ -14,10 +14,11 @@ typedef CorgiUInt Bool;
 #define FALSE   !TRUE
 
 #define TRACE(...) do { \
-    fprintf(stderr, "%s:%u ", __FILE__, __LINE__); \
-    fprintf(stderr, __VA_ARGS__); \
-    fprintf(stderr, "\n"); \
-    fflush(stderr); \
+    FILE* fp = stdout; \
+    fprintf(fp, "%s:%u ", __FILE__, __LINE__); \
+    fprintf(fp, __VA_ARGS__); \
+    fprintf(fp, "\n"); \
+    fflush(fp); \
 } while (0)
 
 struct Options {
