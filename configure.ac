@@ -41,6 +41,7 @@ AC_CONFIG_FILES([Makefile
                  rc])
 AC_OUTPUT
 
+echo "Replacing directive names..."
 config_file="include/corgi/config.h"
 tmp_file="$$"
 sed -e "s/^#define /#define CORGI_/" < "${config_file}" > "${tmp_file}"
