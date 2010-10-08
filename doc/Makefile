@@ -44,7 +44,7 @@ html:
 		mv tmp $$html; \
 	done
 	if [ -d html/_static ]; then \
-		rm -rf html/_static; \
+		rm -rf html/static; \
 		mv html/_static html/static; \
 	fi
 	@echo
