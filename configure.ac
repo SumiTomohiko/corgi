@@ -37,7 +37,8 @@ fi
 
 AC_CONFIG_FILES([Makefile
                  src/Makefile
-                 tests/Makefile])
+                 tests/Makefile
+                 rc])
 AC_OUTPUT
 
 config_file="include/corgi/config.h"

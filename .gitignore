@@ -29,6 +29,7 @@ libtool
 ltmain.sh
 m4
 missing
+rc
 src/Makefile
 src/corgi
 tests/Makefile
