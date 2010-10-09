@@ -107,11 +107,12 @@ Syntax
 Syntax Elements
 ~~~~~~~~~~~~~~~
 
-========= ===============
-``|``     alternation
-``(...)`` group
-``[...]`` character class
-========= ===============
+================ ===============
+``|``            alternation
+``(...)``        group
+``(?<name>...)`` named group
+``[...]``        character class
+================ ===============
 
 Character Types
 ~~~~~~~~~~~~~~~
