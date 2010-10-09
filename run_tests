@@ -18,7 +18,7 @@ print_header()
 dir=`dirname $0`
 . "${dir}/rc"
 tests_dir="${dir}/tests"
-find "${tests_dir}" -perm 0755 -regex "${tests_dir}/test_[^\\.]*" | sort | while read cmd
+find "${tests_dir}" -perm 0755 -name "test_*" | grep -wv py | sort | while read cmd
 do
   print_header "${cmd}"
   CORGI="${dir}/src/corgi" "${cmd}"
