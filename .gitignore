@@ -16,6 +16,7 @@ config.sub
 configure
 core
 depcomp
+doc/conf.py
 doc/doctrees
 doc/html
 doc/index.rst

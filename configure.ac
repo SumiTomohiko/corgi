@@ -38,7 +38,8 @@ fi
 AC_CONFIG_FILES([Makefile
                  src/Makefile
                  tests/Makefile
-                 rc])
+                 rc
+                 doc/conf.py])
 AC_OUTPUT
 
 echo "Replacing directive names..."
