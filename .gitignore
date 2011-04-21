@@ -6,6 +6,7 @@
 .gdb_history
 .libs
 Makefile.in
+_configs.sed
 aclocal.m4
 autom4te.cache
 compile
