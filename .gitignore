@@ -5,6 +5,7 @@
 .deps
 .gdb_history
 .libs
+Makefile
 Makefile.in
 _configs.sed
 aclocal.m4
