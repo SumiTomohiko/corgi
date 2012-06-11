@@ -7,7 +7,6 @@
 Makefile
 build
 core
-doc/conf.py
 doc/doctrees
 doc/html
 doc/index.rst
