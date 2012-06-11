@@ -46,7 +46,7 @@ copyright = u'2010-2012, Tomohiko Sumi'
 from re import search
 
 def read_version():
-    with open("../README") as fp:
+    with open("index.rst") as fp:
         for line in fp:
             m = search(r"\d+\.\d+\.\d+$", line)
             if m is None:
