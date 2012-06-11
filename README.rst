@@ -9,7 +9,7 @@ Features
 
 * corgi accepts UTF-32 strings.
 * Based on Python's regular expression's engine (it seems fast).
-* Open source
+* MIT License
 
 Requirements
 ------------
@@ -22,19 +22,25 @@ CPU
 OS
 ~~
 
-- Ubuntu Linux 8.04
-- FreeBSD 8.1
-- OpenBSD 4.6
+- FreeBSD 8.2
 
-Install
--------
+Building and Installing
+-----------------------
+
+Prerequirements
+~~~~~~~~~~~~~~~
+
+* `Python 3 <http://www.python.org/>`_
+
+Building Instruction
+~~~~~~~~~~~~~~~~~~~~
 
 ::
 
-  $ ./configure && make
+  $ make configure build
 
-You will get ``src/.libs/libcorgi.so.x.y.z``, ``src/.libs/libcorgi.a`` and
-``src/corgi``.
+You will get ``libcorgi.so``, ``libcorgi.a`` and ``corgi`` in ``build/src``
+directory.
 
 ``corgi`` Utility
 -----------------
@@ -288,18 +294,6 @@ Converts a :c:type:`CorgiStatus` value to a string.
 Contact
 -------
 
-- Tomohiko Sumi (``SumiTomohiko@neko-daisuki.ddo.jp``)
-
-Copyright and License Information
----------------------------------
-
-::
-
-  Copyright (c) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
-  Python Software Foundation.
-  All rights reserved.
-
-  Copyright (c) 2010 Tomohiko Sumi.
-  All rights reserved.
+- Tomohiko Sumi ``<SumiTomohiko@neko-daisuki.ddo.jp>``
 
 .. vim: tabstop=2 shiftwidth=2 expandtab softtabstop=2 filetype=rst
