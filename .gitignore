@@ -4,7 +4,6 @@
 .waf-*
 .waf3-*
 .wafpickle-*
-Makefile
 build
 core
 corgi-*.tar.xz
