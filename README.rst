@@ -37,7 +37,7 @@ Building Instruction
 
 ::
 
-  $ make configure build
+  $ ./configure && make
 
 You will get ``libcorgi.so``, ``libcorgi.a`` and ``corgi`` in ``build/src``
 directory.
