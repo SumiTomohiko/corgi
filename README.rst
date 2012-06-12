@@ -42,6 +42,13 @@ Building Instruction
 You will get ``libcorgi.so``, ``libcorgi.a`` and ``corgi`` in ``build/src``
 directory.
 
+Installing Instruction
+~~~~~~~~~~~~~~~~~~~~~~
+
+::
+
+  $ make install
+
 ``corgi`` Utility
 -----------------
 
