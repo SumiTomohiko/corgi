@@ -298,9 +298,9 @@ Searching is started from *at*.
 
 Converts a :c:type:`CorgiStatus` value to a string.
 
-Contact
--------
+Author
+------
 
-- Tomohiko Sumi ``<SumiTomohiko@neko-daisuki.ddo.jp>``
+- `Tomohiko Sumi <http://neko-daisuki.ddo.jp/~SumiTomohiko/index.html>`_
 
 .. vim: tabstop=2 shiftwidth=2 expandtab softtabstop=2 filetype=rst
