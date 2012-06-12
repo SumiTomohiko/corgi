@@ -7,6 +7,7 @@
 Makefile
 build
 core
+corgi-*.tar.xz
 doc/doctrees
 doc/html
 doc/index.rst

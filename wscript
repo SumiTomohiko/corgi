@@ -56,5 +56,6 @@ def build(ctx):
 
 def dist(ctx):
     ctx.algo = "tar.xz"
+    ctx.excl = [".*", "build"]
 
 # vim: tabstop=4 shiftwidth=4 expandtab softtabstop=4 filetype=python
