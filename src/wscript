@@ -1,12 +1,17 @@
 
 def build(ctx):
-    opts = {
+    common_opts = {
             "cflags": ["-Wall", "-Werror", "-g", "-O3"],
             "includes": ["../include", "."] }
     corgi = "corgi"
-    ctx.program(target=corgi, source="main.c", use=corgi, **opts)
-    for lib in [ctx.shlib, ctx.stlib]:
-        lib(target=corgi, source=["corgi.c", "unicode.c"], **opts)
+    lib_name = "libcorgi.a"
+    ctx.program(target=corgi, source="main.c", use=lib_name, **common_opts)
+    lib_opts = common_opts.copy()
+    lib_opts.update({
+            "source": ["corgi.c", "unicode.c"],
+            "target": corgi })
+    ctx.shlib(**lib_opts)
+    ctx.stlib(name=lib_name, **lib_opts)
 
     top_dir = ctx.top_dir
     out_dir = ctx.out_dir
