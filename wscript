@@ -54,8 +54,14 @@ def configure(ctx):
 def build(ctx):
     ctx.recurse("src")
 
-def dist(ctx):
+def set_algo(ctx):
     ctx.algo = "tar.xz"
+
+def dist(ctx):
+    set_algo(ctx)
     ctx.excl = [".*", "build"]
+
+def distcheck(ctx):
+    set_algo(ctx)
 
 # vim: tabstop=4 shiftwidth=4 expandtab softtabstop=4 filetype=python
