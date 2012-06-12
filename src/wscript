@@ -33,4 +33,6 @@ def build(ctx):
             target="../{constants_h}".format(**locals()),
             source="../{constants_py}".format(**locals()))
 
+    ctx.install_files("${PREFIX}/lib", "libcorgi.a")
+
 # vim: tabstop=4 shiftwidth=4 expandtab softtabstop=4 filetype=python
