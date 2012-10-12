@@ -1,30 +1,12 @@
 #if !defined(CORGI_H_INCLUDED)
 #define CORGI_H_INCLUDED
 
+#include <stdint.h>
 #include "corgi/config.h"
 
-#if CORGI_SIZEOF_INT == 4
-#   define CHAR_TYPE int
-#elif CORGI_SIZEOF_LONG == 4
-#   define CHAR_TYPE long
-#else
-#   error "Cannot determine CorgiChar type"
-#endif
-typedef unsigned CHAR_TYPE CorgiChar;
-#undef CHAR_TYPE
-
-#if CORGI_SIZEOF_INT == CORGI_SIZEOF_VOIDP
-#   define NUMBER_TYPE int
-#elif CORGI_SIZEOF_LONG == CORGI_SIZEOF_VOIDP
-#   define NUMBER_TYPE long
-#elif CORGI_SIZEOF_LONG_LONG == CORGI_SIZEOF_VOIDP
-#   define NUMBER_TYPE long long
-#else
-#   error "Cannot determine CorgiStatus type"
-#endif
-typedef NUMBER_TYPE CorgiInt;
-typedef unsigned NUMBER_TYPE CorgiUInt;
-#undef NUMBER_TYPE
+typedef uint32_t CorgiChar;
+typedef long CorgiInt;
+typedef unsigned long CorgiUInt;
 typedef CorgiInt CorgiStatus;
 
 #define CORGI_OK        0
