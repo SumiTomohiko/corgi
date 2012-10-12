@@ -14,15 +14,8 @@ Features
 Requirements
 ------------
 
-CPU
-~~~
-
-- Intel x86
-
-OS
-~~
-
-- FreeBSD 8.2
+* FreeBSD 9.0/amd64
+* FreeBSD 9.0/i386
 
 Building and Installing
 -----------------------
