@@ -4,10 +4,11 @@ from re import search
 def read_version():
     with open("README.rst") as fp:
         for line in fp:
-            m = search(r"\d+\.\d+\.\d+$", line)
+            m = search(r"\d+\.\d+\.\d+(?:[A-Za-z]+\d*)?$", line)
             if m is None:
                 continue
             return m.group()
+    raise Exception("Version number not found")
 
 APPNAME = "corgi"
 VERSION = read_version()

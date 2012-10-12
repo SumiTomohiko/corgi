@@ -1,6 +1,6 @@
 
-corgi 0.0.3
-===========
+corgi 1.0.0dev1
+===============
 
 corgi is a regular expression library for C.
 
